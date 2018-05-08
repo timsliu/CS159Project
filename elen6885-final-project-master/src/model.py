@@ -65,7 +65,7 @@ class FFPolicy(nn.Module):
         return action_mean, action_std
 
 
-
+# T - inherits from FFPolicy superclass containing act method
 class CNNPolicy(FFPolicy):
     def __init__(self, num_inputs, action_space):
         super(CNNPolicy, self).__init__()
@@ -125,8 +125,7 @@ def weights_init_mlp(m):
         m.weight.data *= 1 / torch.sqrt(m.weight.data.pow(2).sum(1, keepdim=True))
         if m.bias is not None:
             m.bias.data.fill_(0)
-
-
+# T - inherits from FFPolicy superclass containing act method
 class MLPPolicy(FFPolicy):
     def __init__(self, num_inputs, action_space):
         super(MLPPolicy, self).__init__()

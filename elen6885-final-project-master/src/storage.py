@@ -1,6 +1,7 @@
 import torch
 
-
+# T - what the fuck is this?
+# T - stores information about each model run?
 class RolloutStorage(object):
     def __init__(self, num_steps, num_processes, obs_shape, action_space):
         self.observations = torch.zeros(num_steps + 1, num_processes, *obs_shape)

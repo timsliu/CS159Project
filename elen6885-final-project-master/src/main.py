@@ -36,6 +36,7 @@ assert args.algo in ['a2c', 'ppo', 'acktr']
 if args.algo == 'ppo':
     assert args.num_processes * args.num_steps % args.batch_size == 0
 
+# T Floor divide to get number of updates to do - not sure what updates means?
 num_updates = int(args.num_frames) // args.num_steps // args.num_processes
 
 torch.manual_seed(args.seed)
@@ -108,7 +109,7 @@ def main():
     if args.cuda:
         actor_critic.cuda()
 
-    # pull arguments and choose algorithm and optimizer
+    # T - pull arguments and choose algorithm and optimizer
     if args.algo == 'a2c':
         optimizer = optim.RMSprop(filter(lambda p: p.requires_grad,actor_critic.parameters()), args.lr, eps=args.eps, alpha=args.alpha)
     elif args.algo == 'ppo':
@@ -118,8 +119,10 @@ def main():
 
     #TO-DO figure out how to restore optimizer parameters when freezing some weights
     rollouts = RolloutStorage(args.num_steps, args.num_processes, obs_shape, envs.action_space)
+    # return all zeros, so nothing observed
     current_obs = torch.zeros(args.num_processes, *obs_shape)
-
+    
+    # T-not sure what this function is doing??
     def update_current_obs(obs):
         shape_dim0 = envs.observation_space.shape[0]
         obs = torch.from_numpy(obs).float()
@@ -127,12 +130,14 @@ def main():
             current_obs[:, :-shape_dim0] = current_obs[:, shape_dim0:]
         current_obs[:, -shape_dim0:] = obs
 
+    # T - reset the environment; call function to update observation
     obs = envs.reset()
     update_current_obs(obs)
 
     rollouts.observations[0].copy_(current_obs)
 
     # These variables are used to compute average rewards for all processes.
+    # T - initialize rewards to be zero
     episode_rewards = torch.zeros([args.num_processes, 1])
     final_rewards = torch.zeros([args.num_processes, 1])
 
@@ -144,9 +149,13 @@ def main():
         old_model = copy.deepcopy(actor_critic)
 
     start = time.time()
+    # T - begin iterative loop
     for j in range(num_updates):
+        # T - take steps through single instance
+        # T - this is the loop where action/critic happens
         for step in range(args.num_steps):
             # Sample actions
+            # T - buried by the action method ultimately comes from torch.nn.Module
             value, action = actor_critic.act(Variable(rollouts.observations[step], volatile=True))
             cpu_actions = action.data.squeeze(1).cpu().numpy()
 
@@ -154,6 +163,8 @@ def main():
             obs, reward, done, info = envs.step(cpu_actions)
             reward = torch.from_numpy(np.expand_dims(np.stack(reward), 1)).float()
             episode_rewards += reward
+            
+            # T done bool returned by steps; indicates if failure occurred (done)
 
             # If done then clean the history of observations.
             masks = torch.FloatTensor([[0.0] if done_ else [1.0] for done_ in done])
@@ -168,8 +179,9 @@ def main():
                 current_obs *= masks.unsqueeze(2).unsqueeze(2)
             else:
                 current_obs *= masks
-
+            #T - now update the observation matrix
             update_current_obs(obs)
+            #T - store what happened in this step
             rollouts.insert(step, current_obs, action.data, value.data, reward, masks)
 
         next_value = actor_critic(Variable(rollouts.observations[-1], volatile=True))[0].data
@@ -264,7 +276,7 @@ def main():
             #torch.save(save_model, os.path.join(save_path, file_name))
             data = {'update': j, 'model_state_dict': save_model.state_dict(), 'optim_state_dict': optimizer.state_dict()}
             torch.save(data, os.path.join(save_path, file_name))
-
+        # T - write out some log information (not important for us)
         if j % args.log_interval == 0:
             end = time.time()
             total_num_steps = (j + 1) * args.num_processes * args.num_steps
