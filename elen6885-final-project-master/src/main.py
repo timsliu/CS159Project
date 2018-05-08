@@ -64,7 +64,8 @@ def main():
     print("#######")
 
     os.environ['OMP_NUM_THREADS'] = '1'
-
+    
+    # T choose whetehr to visualize
     if args.vis:
         from visdom import Visdom
         viz = Visdom()
@@ -74,15 +75,18 @@ def main():
         make_env(args.env_name, args.seed, i, args.log_dir)
         for i in range(args.num_processes)
     ])
-
+    # T get shape of observation array of the environment
     obs_shape = envs.observation_space.shape
+    # T adjusting the shape; not sure what the * is
     obs_shape = (obs_shape[0] * args.num_stack, *obs_shape[1:])
 
+    #T initialize the actor critic; MLP and CNN classes imported from model.py
     if len(envs.observation_space.shape) == 3:
         actor_critic = CNNPolicy(obs_shape[0], envs.action_space)
     else:
         actor_critic = MLPPolicy(obs_shape[0], envs.action_space)
 
+    #T - some kind of setup with the actor_critic
     if args.finetune:
         checkpoint_path=save_path = os.path.join(args.save_dir, args.algo, args.checkpoint)
         state_dict = torch.load(checkpoint_path)
@@ -94,14 +98,17 @@ def main():
                 param.requires_grad = False
         for name, param in actor_critic.named_parameters():
             print('Param name: %s, requires_grad: %d'%(name,param.requires_grad))
+    # T set up dimensions of the action space 
     if envs.action_space.__class__.__name__ == "Discrete":
         action_shape = 1
     else:
         action_shape = envs.action_space.shape[0]
-
+    # T all arguments imported from arguments.py
+    # T enable cuda pythorch tensor support
     if args.cuda:
         actor_critic.cuda()
 
+    # pull arguments and choose algorithm and optimizer
     if args.algo == 'a2c':
         optimizer = optim.RMSprop(filter(lambda p: p.requires_grad,actor_critic.parameters()), args.lr, eps=args.eps, alpha=args.alpha)
     elif args.algo == 'ppo':
