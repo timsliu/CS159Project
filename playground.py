@@ -13,3 +13,9 @@ def cart_pole():
         env.step(env.action_space.sample()) # take a random action
     print("How'd I do?")
     return
+
+def stand():
+    #check if extension installed correctly
+    env = gym.make('HumanoidGravityOneAndHalf-v0')  #create environment
+    env.reset()
+    return
