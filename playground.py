@@ -12,9 +12,16 @@ from gym_extensions.continuous import mujoco
 def cart_pole():
     env = gym.make('CartPole-v0')  #create environment
     env.reset()
-    for _ in range(1000):
-        env.render()
-        env.step(env.action_space.sample()) # take a random action
+    for i in range(100):
+        print("Step: ", i)
+        action = env.action_space.sample()
+        print("action: ", action)
+        observation, reward, done, info = env.step(action) # take a random action
+        print("obs: ", observation)
+        print("reward: ", reward)
+        print("done: ", done)
+        print("info: ", info)
+
     print("How'd I do?")
     return
 
@@ -26,6 +33,7 @@ def cart_pole2():
             env.render()
             print(observation)
             action = env.action_space.sample()
+            print(action)
             observation, reward, done, info = env.step(action)
             if done:
                 print("Episode finished after {} timesteps".format(t+1))
