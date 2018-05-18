@@ -1,3 +1,15 @@
+# HalfInvertedPendulum
+#
+# This file specifies the class for a half inverted pendulum. It is
+# a custom environment and is similar to inverted_pendulum.py but
+# reads from a different xml file
+#
+# Revision History:
+# 05/18/18    Tim Liu    changed step() to _step to fix NotImplementedError
+# 05/18/18    Tim Liu    changed  self.sim.data.qpos to self.model.data.qpos
+# 05/18/18    Tim Liu    changed self.sim.data.qvel to self.model.data.qvel
+
+
 import numpy as np
 from gym import utils
 from gym.envs.mujoco import mujoco_env
@@ -7,7 +19,7 @@ class HalfInvertedPendulumEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         utils.EzPickle.__init__(self)
         mujoco_env.MujocoEnv.__init__(self, 'half_inverted_pendulum.xml', 2)
 
-    def step(self, a):
+    def _step(self, a):
         reward = 1.0
         self.do_simulation(a, self.frame_skip)
         ob = self._get_obs()
@@ -22,7 +34,7 @@ class HalfInvertedPendulumEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         return self._get_obs()
 
     def _get_obs(self):
-        return np.concatenate([self.sim.data.qpos, self.sim.data.qvel]).ravel()
+        return np.concatenate([self.model.data.qpos, self.model.data.qvel]).ravel()
 
     def viewer_setup(self):
         v = self.viewer
