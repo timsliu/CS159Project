@@ -1,6 +1,3 @@
-# Example actor critic code provided by pytorch. Currently set up for the
-# OpenAI basic CartPole environment; will change for mujoco
-
 import argparse
 import gym
 import numpy as np
@@ -26,7 +23,7 @@ parser.add_argument('--log-interval', type=int, default=10, metavar='N',
 args = parser.parse_args()
 
 
-env = gym.make('CartPole-v0')   #change this line!
+env = gym.make('HalfInvertedPendulum-v0')
 env.seed(args.seed)
 torch.manual_seed(args.seed)
 
@@ -48,6 +45,7 @@ class Policy(nn.Module):
         x = F.relu(self.affine1(x))
         action_scores = self.action_head(x)
         state_values = self.value_head(x)
+        # converts action scores to probabilities
         return F.softmax(action_scores, dim=-1), state_values
 
 
@@ -58,10 +56,14 @@ eps = np.finfo(np.float32).eps.item()
 
 def select_action(state):
     state = torch.from_numpy(state).float()
+    # retrain the model
     probs, state_value = model(state)
+    # creates a multinomial distribution out of probabilities
     m = Categorical(probs)
+    # samples an action according to the policy distribution
     action = m.sample()
     model.saved_actions.append(SavedAction(m.log_prob(action), state_value))
+    # returns the action as a number converted to python type
     return action.item()
 
 
@@ -77,12 +79,20 @@ def finish_episode():
     rewards = torch.tensor(rewards)
     rewards = (rewards - rewards.mean()) / (rewards.std() + eps)
     for (log_prob, value), r in zip(saved_actions, rewards):
+        # reward is the delta param
         reward = r - value.item()
+        # theta
         policy_losses.append(-log_prob * reward)
+        # https://pytorch.org/docs/master/nn.html#torch.nn.SmoothL1Loss
+        # feeds a weird difference between value and the reward
+        # WTF
         value_losses.append(F.smooth_l1_loss(value, torch.tensor([r])))
     optimizer.zero_grad()
+    # WTF
     loss = torch.stack(policy_losses).sum() + torch.stack(value_losses).sum()
+    # compute gradients
     loss.backward()
+    # train the NN
     optimizer.step()
     del model.rewards[:]
     del model.saved_actions[:]
@@ -91,6 +101,7 @@ def finish_episode():
 def main():
     running_reward = 10
     for i_episode in count(1):
+        # random initialization
         state = env.reset()
         for t in range(10000):  # Don't infinite loop while learning
             action = select_action(state)
@@ -100,7 +111,7 @@ def main():
             model.rewards.append(reward)
             if done:
                 break
-
+        # I parameter
         running_reward = running_reward * 0.99 + t * 0.01
         finish_episode()
         if i_episode % args.log_interval == 0:
