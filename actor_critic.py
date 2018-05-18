@@ -10,6 +10,9 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.distributions import Categorical
 
+import mujoco_py
+
+
 
 parser = argparse.ArgumentParser(description='PyTorch actor-critic example')
 parser.add_argument('--gamma', type=float, default=0.99, metavar='G',
@@ -31,6 +34,7 @@ torch.manual_seed(args.seed)
 SavedAction = namedtuple('SavedAction', ['log_prob', 'value'])
 
 
+#class for the policy being used; inherits from a neural network class
 class Policy(nn.Module):
     def __init__(self):
         super(Policy, self).__init__()
@@ -48,13 +52,17 @@ class Policy(nn.Module):
         # converts action scores to probabilities
         return F.softmax(action_scores, dim=-1), state_values
 
-
+#instantiate a new object from the policy class
 model = Policy()
+#choose the optimizer to use; lr is the learning rate
 optimizer = optim.Adam(model.parameters(), lr=3e-2)
 eps = np.finfo(np.float32).eps.item()
 
 
 def select_action(state):
+    '''given a state, this function chooses the action to take
+    arguments: state - observation matrix specifying the current model state
+    return - action to take'''
     state = torch.from_numpy(state).float()
     # retrain the model
     probs, state_value = model(state)
@@ -102,18 +110,24 @@ def main():
     running_reward = 10
     for i_episode in count(1):
         # random initialization
+        print(i_episode)
         state = env.reset()
         for t in range(10000):  # Don't infinite loop while learning
+            #sample an action
             action = select_action(state)
+            #run the simulator and get the next step
             state, reward, done, _ = env.step(action)
+            #make the image if the argument is set to do that
             if args.render:
                 env.render()
             model.rewards.append(reward)
+            #check if the simulation is over (we've fallen over)
             if done:
                 break
         # I parameter
         running_reward = running_reward * 0.99 + t * 0.01
         finish_episode()
+        #print out some diagnostic information
         if i_episode % args.log_interval == 0:
             print('Episode {}\tLast length: {:5d}\tAverage length: {:.2f}'.format(
                 i_episode, t, running_reward))
