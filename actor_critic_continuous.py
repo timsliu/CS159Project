@@ -1,3 +1,8 @@
+# Continuous version of the actor critic algorithm
+#
+# Revision History:
+#
+
 import argparse
 import gym
 import numpy as np
