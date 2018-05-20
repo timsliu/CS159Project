@@ -48,7 +48,7 @@ class Policy(nn.Module):
 
     def forward(self, x):
         x = F.relu(self.affine1(x))
-        return self.mu_head(x), self.sigma2_head(x), self.value_head(x)
+        return self.mu_head(x), F.softplus(self.sigma2_head(x)), self.value_head(x)
 
 
 model = Policy()
@@ -61,10 +61,13 @@ def select_action(state):
     # retrain the model
     mu, sigma, state_value = model(state)
     # creates a multivariate distribution
-    #print(mu, sigma)
+    if sigma != sigma: 
+    	sigma = torch.tensor(float(1.00001))
     m = Normal(mu, sigma)
     # samples an action according to the policy distribution
     action = m.sample()
+    # print('mu: {0}, sigma: {1}'.format(mu, sigma))
+    # print('log prob {0}'.format(m.log_prob(action)))
     model.saved_actions.append(SavedAction(m.log_prob(action), state_value))
     # returns the action as a number converted to python type and bounded within -1, 1
     #return max(Max_action, min(Min_action, m.sample().item()))
@@ -72,7 +75,8 @@ def select_action(state):
     #print( m.sample())
     #if  m.sample().item() > Max_action or m.sample().item() < Min_action:
     #    print('## \n ugh \n ##')
-    return m.sample().item()
+    return action.item()
+    # m.sample().item()
 
 
 def finish_episode():
@@ -86,7 +90,11 @@ def finish_episode():
         R = r + args.gamma * R
         rewards.insert(0, R)
     rewards = torch.tensor(rewards)
-    rewards = (rewards - rewards.mean()) / (rewards.std() + eps)
+    if rewards.std() != rewards.std():
+        rewards = (rewards - rewards.mean()) / (eps)
+    else:
+        rewards = (rewards - rewards.mean()) / (rewards.std() + eps)
+
     for (log_prob, value), r in zip(saved_actions, rewards):
         # reward is the delta param
         reward = r - value.item()
@@ -99,6 +107,7 @@ def finish_episode():
     optimizer.zero_grad()
     # sum of 2 losses?
     loss = torch.stack(policy_losses).sum() + torch.stack(value_losses).sum()
+    torch.nn.utils.clip_grad_norm(model.parameters(), 40)
     # compute gradients
     loss.backward()
     # train the NN
@@ -116,6 +125,7 @@ def main():
         for t in range(10000):  # Don't infinite loop while learning
             action = select_action(state)
             state, reward, done, _ = env.step(action)
+            # print('done {0}'.format(done))
             if args.render:
                 env.render()
             model.rewards.append(reward)
