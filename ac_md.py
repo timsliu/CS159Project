@@ -48,8 +48,9 @@ env2.seed(args.seed)
 #now seed the torch randomness
 torch.manual_seed(args.seed)
 
-#save actions for the single model
+#save actions for each of the two heads
 SavedAction = namedtuple('SavedAction', ['log_prob', 'value'])
+
 
 #class for the policy being used; inherits from a neural network class
 class Policy(nn.Module):
@@ -63,10 +64,13 @@ class Policy(nn.Module):
         self.value_head = nn.Linear(128, 1)
 
         self.saved_actions = []
+
+        # may need to split and save rewards for both environments
         self.rewards = []
 
     def forward(self, x):
         x = F.relu(self.affine1(x))
+        # add second action_score for second environment
         action1_scores = self.action1_head(x)
         action2_scores = self.action2_head(x)
         state_values = self.value_head(x)
@@ -81,40 +85,45 @@ model = Policy()
 optimizer = optim.Adam(model.parameters(), lr=3e-2)
 eps = np.finfo(np.float32).eps.item()
 
-#TODO - modify to return action from a certain head
-def select_action(state, episode):
+def select_action(state, env):
     '''given a state, this function chooses the action to take
     arguments: state - observation matrix specifying the current model state
-               episode - integer specifying which environment to sample action
+               env - integer specifying which environment to sample action
                          for
     return - action to take'''
     state = torch.from_numpy(state).float()
     # retrain the model
     probs1, probs2, state_value = model(state)
     #select which probability to use based on passed argument
-    if episode == 1:
+    if env == 1:
         probs = probs1
-    if episode == 2:
+    if env == 2:
         probs = probs2
     # creates a multinomial distribution out of probabilities
     m = Categorical(probs)
     # samples an action according to the policy distribution
     action = m.sample()
-    model.saved_actions.append(SavedAction(m.log_prob(action), state_value))
+    
+    # save the actions that we took for each environment 
+    model.saved_actions.append(SavedAction(m.log_prob(action), state_value))        
     # returns the action as a number converted to python type
     return action.item()
 
 
 def finish_episode():
     R = 0
+    # append all the actions together
     saved_actions = model.saved_actions
     policy_losses = []
     value_losses = []
     rewards = []
+    # add rewards for environment 1
     for r in model.rewards[::-1]:
         R = r + args.gamma * R
         rewards.insert(0, R)
+    # convert to a tensor form
     rewards = torch.tensor(rewards)
+    #normalize all of them
     rewards = (rewards - rewards.mean()) / (rewards.std() + eps)
     #may need to change this so it works on both sets of saved_actions
     for (log_prob, value), r in zip(saved_actions, rewards):
@@ -125,6 +134,7 @@ def finish_episode():
         # https://pytorch.org/docs/master/nn.html#torch.nn.SmoothL1Loss
         # feeds a weird difference between value and the reward
         value_losses.append(F.smooth_l1_loss(value, torch.tensor([r])))
+               
     optimizer.zero_grad()
     loss = torch.stack(policy_losses).sum() + torch.stack(value_losses).sum()
     # compute gradients
@@ -141,6 +151,7 @@ def main():
         # random initialization
         state1 = env1.reset()
         state2 = env2.reset()
+        fail = 0
         for t in range(10000):  # Don't infinite loop while learning
             if t % 2 == 0:
                 state = state1
@@ -154,6 +165,7 @@ def main():
                 model.rewards.append(reward)
                 #check if the simulation is over (we've fallen over)
                 if done:
+                    fail = 1
                     break                
             if t % 2 == 1:
                 state = state2
@@ -169,16 +181,17 @@ def main():
                 model.rewards.append(reward)
                 #check if the simulation is over (we've fallen over)
                 if done:
+                    fail = 2
                     break                
-
-        # I parameter
+        # terminates if either one falls over
+        t = int(t/2)  #divide by two because we alternated between two environments
         running_reward = running_reward * 0.99 + t * 0.01
         finish_episode()
         #print out some diagnostic information
         if i_episode % args.log_interval == 0:
             print('Episode {}\tLast length: {:5d}\tAverage length: {:.2f}'.format(
                 i_episode, t, running_reward))
-        #change this later - right now only checks if one environment has 
+            print("Failed environment: %d"  %fail)
         #reached reward threshold
         if running_reward > env1.spec.reward_threshold:
             print("Solved! Running reward is now {} and "
