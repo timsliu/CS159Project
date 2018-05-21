@@ -66,7 +66,7 @@ def select_action(state):
     # retrain the model
     mu, sigma, state_value = model(state)
     # creates a multivariate distribution
-    if sigma != sigma: 
+    if sigma != sigma:
     	sigma = torch.tensor(float(1.00001))
     m = Normal(mu, sigma)
     # samples an action according to the policy distribution
@@ -112,7 +112,7 @@ def finish_episode():
     optimizer.zero_grad()
     # sum of 2 losses?
     loss = torch.stack(policy_losses).sum() + torch.stack(value_losses).sum()
-    torch.nn.utils.clip_grad_norm(model.parameters(), 40)
+    # torch.nn.utils.clip_grad_norm(model.parameters(), 40)
     # compute gradients
     loss.backward()
     # train the NN
