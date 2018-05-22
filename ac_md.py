@@ -39,9 +39,9 @@ parser.add_argument('--log-interval', type=int, default=10, metavar='N',
 args = parser.parse_args()
 
 #first environment to train on
-env1 = gym.make('InvertedPendulum-v2')
+env1 = gym.make('CartPole-v1')
 #second environment to train on
-env2 = gym.make('HalfInvertedPendulum-v0')
+env2 = gym.make('CartPoleLowG-v1')
 #seed both environments with the same randomness
 env1.seed(args.seed)
 env2.seed(args.seed)
