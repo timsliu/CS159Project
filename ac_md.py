@@ -10,6 +10,8 @@
 #                        a third argument for second head
 # 05/19/18    Tim Liu    added conditional statement to main to alternate
 #                        training the two different environments
+# 05/22/18    Tim Liu    swapped to discrete environments - was previously
+#                        using continuous ones
 
 import argparse
 import gym
@@ -64,8 +66,6 @@ class Policy(nn.Module):
         self.value_head = nn.Linear(128, 1)
 
         self.saved_actions = []
-
-        # may need to split and save rewards for both environments
         self.rewards = []
 
     def forward(self, x):
@@ -112,12 +112,10 @@ def select_action(state, env):
 
 def finish_episode():
     R = 0
-    # append all the actions together
     saved_actions = model.saved_actions
     policy_losses = []
     value_losses = []
     rewards = []
-    # add rewards for environment 1
     for r in model.rewards[::-1]:
         R = r + args.gamma * R
         rewards.insert(0, R)
