@@ -48,6 +48,7 @@ pi = Variable(torch.FloatTensor([math.pi]))
 # first environment
 env1 = gym.make('InvertedPendulum-v2')
 env1.seed(args.seed)
+
 # second environment
 env2 = gym.make('HalfInvertedPendulum-v0')
 env2.seed(args.seed)
@@ -101,9 +102,10 @@ class Policy(nn.Module):
         # mu and sigma head for environment 2
         self.mu_head_env2 = nn.Linear(128, 1)
         self.sigma2_head_env2 = nn.Linear(128, 1)
-        # define the value head
-        self.value_head = nn.Linear(128, 1)
-        
+        # define the value heads
+        self.value_head_env1 = nn.Linear(128, 1)
+        self.value_head_env2 = nn.Linear(128, 1)
+
         # initialize environment 1 head
         self.apply(weights_init)
         self.mu_head_env1.weight.data = normalized_columns_initializer\
@@ -112,7 +114,7 @@ class Policy(nn.Module):
             (self.sigma2_head_env1.weight.data, 0.01)
         self.mu_head_env1.bias.data.fill_(0)
         self.sigma2_head_env1.bias.data.fill_(0)
-        
+
         # initialize environment 2 head
         self.apply(weights_init)
         self.mu_head_env2.weight.data = normalized_columns_initializer\
@@ -121,15 +123,20 @@ class Policy(nn.Module):
             (self.sigma2_head_env2.weight.data, 0.01)
         self.mu_head_env2.bias.data.fill_(0)
         self.sigma2_head_env2.bias.data.fill_(0)
-        
-        #initialization for the value head
-        self.value_head.weight.data = normalized_columns_initializer(self.value_head.weight.data, 1.0)
-        self.value_head.bias.data.fill_(0)
-        
+
+        #initialization for the value heads
+        self.value_head_env1.weight.data = normalized_columns_initializer(self.value_head_env1.weight.data, 1.0)
+        self.value_head_env1.bias.data.fill_(0)
+
+        self.value_head_env2.weight.data = normalized_columns_initializer(self.value_head_env2.weight.data, 1.0)
+        self.value_head_env2.bias.data.fill_(0)
+
         # initialize lists for holding run information
-        self.saved_actions = []
+        self.saved_actions_env1 = []
         self.entropies = []
-        self.rewards = []
+        self.rewards_env1 = []
+        self.saved_actions_env2 = []
+        self.rewards_env2 = []
 
     def forward(self, x):
         '''updated to have 5 return values (2 for each action head one for
@@ -137,7 +144,7 @@ class Policy(nn.Module):
         x = F.relu(self.affine1(x))
         return self.mu_head_env1(x), F.softplus(self.sigma2_head_env1(x)),\
                self.mu_head_env2(x), F.softplus(self.sigma2_head_env2(x)),\
-               self.value_head(x)
+               self.value_head_env1(x), self.value_head_env2(x)
         # torch.exp(self.sigma2_head(x))
 
 # for debugging
@@ -154,28 +161,32 @@ def select_action(state, env):
     arguments: state - observation matrix specifying the current model state
                env - integer specifying which environment to sample action
                          for
-    return - action to take'''   
-    
+    return - action to take'''
+
     state = torch.from_numpy(state).float()
-    # retrain the model - returns 
-    mu1, sigma1, mu2, sigma2, state_value = model(state)
+    # retrain the model - returns
+    mu1, sigma1, mu2, sigma2, state_value1, state_value2 = model(state)
     # mu1 sigma 1 correspond to environment 1
     # mu2 sigma 2 correspond to environment 2
-    
+
     # decide which mu and sigma to use depending on the env being trained
     if env == 1:
         mu = mu1
         sigma = sigma1
+        state_value = state_value1
+        saved_actions = model.saved_actions_env1
     if env == 2:
         mu = mu2
         sigma = sigma2
+        state_value = state_value2
+        saved_actions = model.saved_actions_env2
 
     # debugging
     if False:
         print(mu)
         print(state_value)
         print(model.sigma2_head_env1.weight)
-        print(model.sigma2_head_env2.weight)    
+        print(model.sigma2_head_env2.weight)
         print(model.affine1.weight)
     # if sigma is nan
     if sigma != sigma:
@@ -183,7 +194,7 @@ def select_action(state, env):
         print(state_value)
         # print out the weights
         print(model.sigma2_head_env1.weight)
-        print(model.sigma2_head_env2.weight)    
+        print(model.sigma2_head_env2.weight)
         sigma = torch.tensor(float(0.1))
         print('sigma is nan')
         exit()
@@ -195,39 +206,46 @@ def select_action(state, env):
     action = prob.sample()
     log_prob = prob.log_prob(action)
     model.entropies.append(entropy)
-    model.saved_actions.append(SavedAction(log_prob, state_value))
+    saved_actions.append(SavedAction(log_prob, state_value))
     # returns the action as a number converted to python type and bounded within -1, 1
 
     return action.item()
 
 
 def finish_episode(state):
-    R = torch.zeros(1, 1)
-    R = Variable(R)
-    saved_actions = model.saved_actions
+    num_envs = 2
     policy_losses = []
     value_losses = []
-    rewards = []
-    # compute the reward for each state in the end of a rollout
-    for r in model.rewards[::-1]:
-        R = r + args.gamma * R
-        rewards.insert(0, R)
-    rewards = torch.tensor(rewards)
-    if rewards.std() != rewards.std() or len(rewards) == 0:
-        rewards = rewards - rewards.mean()
-    else:
-        rewards = (rewards - rewards.mean()) / rewards.std()
+    for i in range(num_envs):
+        if i % 2 == 0:
+            saved_actions = model.saved_actions_env1
+            model_rewards = model.rewards_env1
+        else:
+            saved_actions = model.saved_actions_env2
+            model_rewards = model.rewards_env2
+        R = torch.zeros(1, 1)
+        R = Variable(R)
+        rewards = []
+        # compute the reward for each state in the end of a rollout
+        for r in model_rewards[::-1]:
+            R = r + args.gamma * R
+            rewards.insert(0, R)
+        rewards = torch.tensor(rewards)
+        if rewards.std() != rewards.std() or len(rewards) == 0:
+            rewards = rewards - rewards.mean()
+        else:
+            rewards = (rewards - rewards.mean()) / rewards.std()
 
-    for (log_prob, value), r in zip(saved_actions, rewards):
-        # reward is the delta param
-        value += Variable(torch.randn(value.size()))
-        reward = r - value.item()
-        # theta
-        # need gradient descent - so negative
-        policy_losses.append(-log_prob * reward)
-        # https://pytorch.org/docs/master/nn.html#torch.nn.SmoothL1Loss
-        # feeds a weird difference between value and the reward
-        value_losses.append(F.smooth_l1_loss(value, torch.tensor([r])))
+        for (log_prob, value), r in zip(saved_actions, rewards):
+            # reward is the delta param
+            value += Variable(torch.randn(value.size()))
+            reward = r - value.item()
+            # theta
+            # need gradient descent - so negative
+            policy_losses.append(-log_prob * reward)
+            # https://pytorch.org/docs/master/nn.html#torch.nn.SmoothL1Loss
+            # feeds a weird difference between value and the reward
+            value_losses.append(F.smooth_l1_loss(value, torch.tensor([r])))
     optimizer.zero_grad()
     # sum of 2 losses?
     loss = (torch.stack(policy_losses).sum() + 0.5*torch.stack(value_losses).sum() \
@@ -249,9 +267,12 @@ def finish_episode(state):
 
     # train the NN
     optimizer.step()
-    del model.rewards[:]
-    del model.saved_actions[:]
+    del model.saved_actions_env1[:]
     del model.entropies[:]
+    del model.rewards_env1[:]
+    del model.saved_actions_env2[:]
+    del model.rewards_env2[:]
+
 
 
 def main():
@@ -268,23 +289,31 @@ def main():
                 # train environment 1 half the time
                 action = select_action(state1, 1)
                 state1, reward, done, _ = env1.step(action)
+                reward = max(min(reward, 1), -1)
+                model.rewards_env1.append(reward)
+                if args.render:
+                    env1.render()
                 if done:
                     break
-            if t% 2 == 1:
+            if t % 2 == 1:
                 # train environment 2 other half of the time
-                state = state1  # variable used for finishing                
+                state = state1  # variable used for finishing
                 action = select_action(state2, 2)
                 state2, reward, done, _ = env2.step(action)
+                reward = max(min(reward, 1), -1)
+                model.rewards_env2.append(reward)
+                if args.render:
+                    env2.render()
                 if done:
                     break
             # clip the rewards (?)
-            reward = max(min(reward, 1), -1)
+            #reward = max(min(reward, 1), -1)
             # render if arguments specify it
-            if args.render:
-                env.render()
+
             # keep running list of all rewards
-            model.rewards.append(reward)    
-            
+
+            #model.rewards_env1.append(reward)
+
         t = int(t/2)  #divide by two because we alternated between two environments
         # update our running reward
         running_reward = running_reward * 0.99 + t * 0.01
@@ -293,7 +322,7 @@ def main():
             print('Episode {}\tLast length: {:5d}\tAverage length: {:.2f}'.format(
                 i_episode, t, running_reward))
         # for now use env1 reward threshold
-        if running_reward > env1.spec.reward_threshold:
+        if running_reward > env1.spec.reward_threshold and running_reward > env2.spec.reward_threshold:
             print("Solved! Running reward is now {} and "
                   "the last episode runs to {} time steps!".format(running_reward, t))
             break
