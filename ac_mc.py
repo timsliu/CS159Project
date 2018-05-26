@@ -20,6 +20,7 @@ import gym
 import numpy as np
 from itertools import count
 from collections import namedtuple
+from gym.envs.mujoco.HalfInvertedPendulum import HalfInvertedPendulumEnv
 
 import torch
 import torch.nn as nn
@@ -101,7 +102,7 @@ class Policy(nn.Module):
         self.sigma2_head_env2 = nn.Linear(128, 1)
         # define the value head
         self.value_head = nn.Linear(128, 1)
-        
+
         # initialize environment 1 head
         self.apply(weights_init)
         self.mu_head_env1.weight.data = normalized_columns_initializer\
@@ -110,7 +111,7 @@ class Policy(nn.Module):
             (self.sigma2_head_env1.weight.data, 0.01)
         self.mu_head_env1.bias.data.fill_(0)
         self.sigma2_head_env1.bias.data.fill_(0)
-        
+
         # initialize environment 2 head
         self.apply(weights_init)
         self.mu_head_env2.weight.data = normalized_columns_initializer\
@@ -119,11 +120,11 @@ class Policy(nn.Module):
             (self.sigma2_head_env2.weight.data, 0.01)
         self.mu_head_env2.bias.data.fill_(0)
         self.sigma2_head_env2.bias.data.fill_(0)
-        
+
         #initialization for the value head
         self.value_head.weight.data = normalized_columns_initializer(self.value_head.weight.data, 1.0)
         self.value_head.bias.data.fill_(0)
-        
+
         # initialize lists for holding run information
         self.saved_actions = []
         self.entropies = []
@@ -143,7 +144,7 @@ test = False
 
 model = Policy()
 # learning rate - might be useful to change
-optimizer = optim.Adam(model.parameters(), lr=3e-3)
+optimizer = optim.Adam(model.parameters(), lr=1e-3)
 eps = np.finfo(np.float32).eps.item()
 
 
@@ -152,14 +153,14 @@ def select_action(state, env):
     arguments: state - observation matrix specifying the current model state
                env - integer specifying which environment to sample action
                          for
-    return - action to take'''   
-    
+    return - action to take'''
+
     state = torch.from_numpy(state).float()
-    # retrain the model - returns 
+    # retrain the model - returns
     mu1, sigma1, mu2, sigma2, state_value = model(state)
     # mu1 sigma 1 correspond to environment 1
     # mu2 sigma 2 correspond to environment 2
-    
+
     # decide which mu and sigma to use depending on the env being trained
     if env == 1:
         mu = mu1
@@ -226,8 +227,8 @@ def finish_episode(state):
         value_losses.append(F.smooth_l1_loss(value, torch.tensor([r])))
     optimizer.zero_grad()
     # sum of 2 losses?
-    loss = (torch.stack(policy_losses).sum() + 0.5*torch.stack(value_losses).sum() \
-            - torch.stack(model.entropies).sum() * 0.0001)
+    loss = torch.stack(policy_losses).sum() + .5 * torch.stack(value_losses).sum() \
+            - torch.stack(model.entropies).sum() * 0.0001
 
     # Debugging
     if False:
@@ -268,7 +269,7 @@ def main():
                     break
             if t% 2 == 1:
                 # train environment 2 other half of the time
-                state = state1  # variable used for finishing                
+                state = state1  # variable used for finishing
                 action = select_action(state2, 2)
                 state2, reward, done, _ = env2.step(action)
                 if done:
@@ -279,8 +280,8 @@ def main():
             if args.render:
                 env.render()
             # keep running list of all rewards
-            model.rewards.append(reward)    
-            
+            model.rewards.append(reward)
+
         t = int(t/2)  #divide by two because we alternated between two environments
         # update our running reward
         running_reward = running_reward * 0.99 + t * 0.01
