@@ -11,6 +11,8 @@
 # Tim Liu    05/23/18    added second argument to select_action for choosing
 #                        which head to sample
 # Tim Liu    05/23/18    changed main loop to allow for multitasking
+# Tim Liu    05/26/18    changed print statement in select_action for if
+#                        sigma is NaN to reflect new sigma head attribute names
 
 
 
@@ -172,14 +174,16 @@ def select_action(state, env):
     if False:
         print(mu)
         print(state_value)
-        print(model.sigma2_head.weight)
+        print(model.sigma2_head_env1.weight)
+        print(model.sigma2_head_env2.weight)    
         print(model.affine1.weight)
     # if sigma is nan
     if sigma != sigma:
         print(mu)
         print(state_value)
-        # need to patch this to get the right error - attributes have changed
-        print(model.sigma2_head.weight)
+        # print out the weights
+        print(model.sigma2_head_env1.weight)
+        print(model.sigma2_head_env2.weight)    
         sigma = torch.tensor(float(0.1))
         print('sigma is nan')
         exit()
