@@ -3,6 +3,9 @@
 # This program implements actor critic multitask learning for a continuous
 # environment using vanilla multitasking (hard parameter sharing).
 #
+# NOTE: this version improperly keeps a single reward and value between
+#       the two actor heads
+#
 # Revision History
 # Tim Liu    05/23/18    copied from a2c_cont.py and renamed
 # Tim Liu    05/23/18    added second environment env2

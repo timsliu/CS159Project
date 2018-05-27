@@ -13,7 +13,9 @@
 # Tim Liu    05/23/18    changed main loop to allow for multitasking
 # Tim Liu    05/26/18    changed print statement in select_action for if
 #                        sigma is NaN to reflect new sigma head attribute names
-
+# Ayya A     05/26/18    added second value head to policy class
+# Ayya A     05/26/18    corrected select action for different rewards
+# Tim Liu    05/26/18    reduced learning rate to 1e-3
 
 
 import argparse
@@ -152,7 +154,7 @@ test = False
 
 model = Policy()
 # learning rate - might be useful to change
-optimizer = optim.Adam(model.parameters(), lr=3e-3)
+optimizer = optim.Adam(model.parameters(), lr=1e-3)
 eps = np.finfo(np.float32).eps.item()
 
 
