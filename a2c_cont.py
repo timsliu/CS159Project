@@ -27,7 +27,7 @@ parser.add_argument('--entropy-coef', type=float, default=0.01)
 args = parser.parse_args()
 pi = Variable(torch.FloatTensor([math.pi]))
 
-env = gym.make('InvertedPendulum-v2')
+env = gym.make('HalfInvertedPendulum-v0')
 Max_action = env.action_space.high
 Min_action = env.action_space.low
 env.seed(args.seed)

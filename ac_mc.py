@@ -13,6 +13,7 @@
 # Tim Liu    05/23/18    changed main loop to allow for multitasking
 # Tim Liu    05/26/18    changed print statement in select_action for if
 #                        sigma is NaN to reflect new sigma head attribute names
+# Tim Liu    05/26/18    learning rate reduced to 1e-3
 
 
 
