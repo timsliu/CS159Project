@@ -297,7 +297,7 @@ def main():
                     break
             if t % 2 == 1:
                 # train environment 2 other half of the time
-                state = state1  # variable used for finishing
+                state = state2  # variable used for finishing
                 action = select_action(state2, 2)
                 state2, reward, done, _ = env2.step(action)
                 reward = max(min(reward, 1), -1)

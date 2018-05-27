@@ -176,7 +176,7 @@ def select_action(state, env):
         print(mu)
         print(state_value)
         print(model.sigma2_head_env1.weight)
-        print(model.sigma2_head_env2.weight)    
+        print(model.sigma2_head_env2.weight)
         print(model.affine1.weight)
     # if sigma is nan
     if sigma != sigma:
@@ -184,7 +184,7 @@ def select_action(state, env):
         print(state_value)
         # print out the weights
         print(model.sigma2_head_env1.weight)
-        print(model.sigma2_head_env2.weight)    
+        print(model.sigma2_head_env2.weight)
         sigma = torch.tensor(float(0.1))
         print('sigma is nan')
         exit()
