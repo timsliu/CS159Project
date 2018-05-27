@@ -1,3 +1,9 @@
+# Revision History
+#
+# Tim Liu    05/26/18    Reduced learning rate to 1e-3
+# Tim Liu    05/26/18    Added second environment to comment out and run on
+
+
 import argparse
 import math
 import gym
@@ -27,7 +33,9 @@ parser.add_argument('--entropy-coef', type=float, default=0.01)
 args = parser.parse_args()
 pi = Variable(torch.FloatTensor([math.pi]))
 
-env = gym.make('HalfInvertedPendulum-v0')
+#uncomment one of these to switch between environments
+env = gym.make('InvertedPendulum-v2')
+#env = gym.make('HalfInvertedPendulum-v0')
 Max_action = env.action_space.high
 Min_action = env.action_space.low
 env.seed(args.seed)
@@ -94,7 +102,7 @@ test = False
 
 model = Policy()
 # learning rate - might be useful to change
-optimizer = optim.Adam(model.parameters(), lr=3e-3)
+optimizer = optim.Adam(model.parameters(), lr=1e-3)
 eps = np.finfo(np.float32).eps.item()
 
 
