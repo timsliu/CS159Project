@@ -14,6 +14,20 @@ from torch.distributions import Categorical
 from torch.autograd import Variable
 from torch.distributions.normal import Normal
 
+parser = argparse.ArgumentParser(description='distillation')
+parser.add_argument('--gamma', type=float, default=0.99, metavar='G',
+                    help='discount factor (default: 0.99)')
+parser.add_argument('--seed', type=int, default=543, metavar='N',
+                    help='random seed (default: 1)')
+parser.add_argument('--render', action='store_true',
+                    help='render the environment')
+parser.add_argument('--log-interval', type=int, default=10, metavar='N',
+                    help='interval between training status logs (default: 10)')
+parser.add_argument('--entropy-coef', type=float, default=0.01)
+args = parser.parse_args()
+pi = Variable(torch.FloatTensor([math.pi]))
+
+
 
 # first environment
 env1 = gym.make('InvertedPendulum-v2')
@@ -21,10 +35,13 @@ env1.seed(args.seed)
 # second environment
 env2 = gym.make('HalfInvertedPendulum-v0')
 env2.seed(args.seed)
+torch.manual_seed(args.seed)
 
+SavedAction = namedtuple('SavedAction', ['log_prob', 'value'])
 
 class Policy(nn.Module):
-    def __init__():
+    def __init__(self):
+        super(Policy, self).__init__()
         # shared layer for students
         self.affine1 = nn.Linear(4, 128)
         # 2 outputs because 2D space
@@ -47,9 +64,10 @@ class Policy(nn.Module):
         self.teacher_sigma2 = nn.Linear(128, 1)
         self.teacher_value2 = nn.Linear(128, 1)
 
-        self.saved_actions_student = {'1': [], '2': []}
-        self.saved_actions_teacher = {'1': [], '2': []}
-        self.rewards = {'1': [], '2': []}
+        self.saved_actions_student = {1: [], 2: []}
+        self.saved_actions_teacher = {1: [], 2: []}
+        self.rewards_student = {1: [], 2: []}
+        self.rewards_teacher = {1: [], 2: []}
         self.entropies = []
 
     def forward(self, x):
@@ -64,7 +82,7 @@ class Policy(nn.Module):
 
 model = Policy()
 # learning rate - might be useful to change
-optimizer = optim.Adam(model.parameters(), lr=3e-3)
+optimizer = optim.Adam(model.parameters(), lr=1e-3)
 eps = np.finfo(np.float32).eps.item()
 
 def select_action(state, env):
@@ -82,7 +100,7 @@ def select_action(state, env):
         log_prob = prob.log_prob(action)
         model.entropies.append(entropy)
         model.saved_actions_teacher[1].append(SavedAction(log_prob,
-                                                          state_value))
+                                                          tval1))
 
         prob = Normal(mu1, s1.sqrt())
         entropy = 0.5*((s1*2*pi).log()+1)
@@ -90,7 +108,7 @@ def select_action(state, env):
         log_prob = prob.log_prob(action)
         model.entropies.append(entropy)
         model.saved_actions_student[1].append(SavedAction(log_prob,
-                                                          state_value))
+                                                          val1))
     elif env == 2:
         prob = Normal(tmu2, ts2.sqrt())
         entropy = 0.5*((ts2*2*pi).log()+1)
@@ -98,38 +116,38 @@ def select_action(state, env):
         log_prob = prob.log_prob(action)
         model.entropies.append(entropy)
         model.saved_actions_teacher[2].append(SavedAction(log_prob,
-                                                          state_value))
+                                                          tval2))
         prob = Normal(mu2, s2.sqrt())
         entropy = 0.5*((s2*2*pi).log()+1)
         action = prob.sample()
         log_prob = prob.log_prob(action)
         model.entropies.append(entropy)
         model.saved_actions_student[2].append(SavedAction(log_prob,
-                                                          state_value))
+                                                          val2))
     return action.item()
 
 
 def KL_MV_gaussian(mu_p, std_p, mu_q, std_q):
     kl = (std_q/std_p).log() + (std_p.pow(2)+(mu_p-mu_q).pow(2)) / \
             (2*std_q.pow(2)) - 0.5
-    kl = kl.sum(1, keepdim=True) # sum across all dimensions
-    kl = kl.mean() # take mean across all steps
+    # kl = kl.sum(1, keepdim=True) # sum across all dimensions
+    # kl = kl.mean() # take mean across all steps
     return kl
 
 
-def finish_episode(state, teacher_student):
+def finish_episode(state):
     # Compare teacher distribution against student distribution and
     # enforce closeness with KL divergence
     num_envs = 2
     policy_losses = []
     value_losses = []
     for i in range(num_envs):
-        if i % 2 == 0 and:
-            saved_actions = model.saved_actions_env1
-            model_rewards = model.rewards_env1
+        if i % 2 == 0:
+            saved_actions = model.saved_actions_student[1]
+            model_rewards = model.rewards_student[1]
         else:
-            saved_actions = model.saved_actions_env2
-            model_rewards = model.rewards_env2
+            saved_actions = model.saved_actions_student[2]
+            model_rewards = model.rewards_student[2]
 
         R = torch.zeros(1, 1)
         R = Variable(R)
@@ -156,8 +174,13 @@ def finish_episode(state, teacher_student):
             value_losses.append(F.smooth_l1_loss(value, torch.tensor([r])))
     optimizer.zero_grad()
     # sum of 2 losses?
-    loss = (torch.stack(policy_losses).sum() + 0.5*torch.stack(value_losses).sum() \
-            - torch.stack(model.entropies).sum() * 0.0001) + #KL divergence
+    loss = (torch.stack(policy_losses).sum() + \
+            0.5*torch.stack(value_losses).sum() - \
+            torch.stack(model.entropies).sum() * 0.0001) + \
+            KL_MV_gaussian(torch.tensor(model.saved_actions_teacher[i]).mean(),
+                           torch.tensor(model.saved_actions_teacher[i]).std(),
+                           torch.tensor(model.saved_actions_student[i]).mean(),
+                           torch.tensor(model.saved_actions_student[i]).std())
 
     # compute gradients
     loss.backward()
@@ -169,8 +192,10 @@ def finish_episode(state, teacher_student):
     del model.saved_actions_student[1][:]
     del model.saved_actions_student[2][:]
     del model.entropies[:]
-    del model.rewards[1][:]
-    del model.rewards[2][:]
+    del model.rewards_student[1][:]
+    del model.rewards_student[2][:]
+    del model.rewards_teacher[1][:]
+    del model.rewards_teacher[2][:]
     del model.saved_actions_teacher[1][:]
     del model.saved_actions_teacher[2][:]
 
@@ -187,10 +212,10 @@ def main():
             if t % 2 == 0:
                 state = state1  # variable used for finishing
                 # train environment 1 half the time
-                action, teacher_student = select_action(state1, 1)
+                action = select_action(state1, 1)
                 state1, reward, done, _ = env1.step(action)
                 reward = max(min(reward, 1), -1)
-                model.rewards_env1.append(reward)
+                model.rewards_student[1].append(reward)
                 if args.render:
                     env1.render()
                 if done:
@@ -198,10 +223,10 @@ def main():
             if t % 2 == 1:
                 # train environment 2 other half of the time
                 state = state2  # variable used for finishing
-                action, teacher_student = select_action(state2, 2)
+                action = select_action(state2, 2)
                 state2, reward, done, _ = env2.step(action)
                 reward = max(min(reward, 1), -1)
-                model.rewards_env2.append(reward)
+                model.rewards_student[2].append(reward)
                 if args.render:
                     env2.render()
                 if done:
