@@ -257,6 +257,7 @@ def finish_episode(state):
     if False:
         print(loss, 'loss')
     # compute gradients
+    print(loss)
     loss.backward()
 
     nn.utils.clip_grad_norm_(model.parameters(), 40)
@@ -275,6 +276,11 @@ def finish_episode(state):
     del model.saved_actions_env2[:]
     del model.rewards_env2[:]
 
+
+def save_checkpoint(model, optimizer, j):
+    data = {'update': j, 'model_state_dict': model.state_dict(),
+            'optim_state_dict': optimizer.state_dict()}
+    torch.save(data, 'teacher.pt')
 
 
 def main():
@@ -323,7 +329,11 @@ def main():
         if i_episode % args.log_interval == 0:
             print('Episode {}\tLast length: {:5d}\tAverage length: {:.2f}'.format(
                 i_episode, t, running_reward))
-        # for now use env1 reward threshold
+            # for now use env1 reward threshold
+
+            # Save the state of the model
+            save_checkpoint(model, optimizer, i_episode)
+
         if running_reward > env1.spec.reward_threshold and running_reward > env2.spec.reward_threshold:
             print("Solved! Running reward is now {} and "
                   "the last episode runs to {} time steps!".format(running_reward, t))

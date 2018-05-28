@@ -28,7 +28,6 @@ args = parser.parse_args()
 pi = Variable(torch.FloatTensor([math.pi]))
 
 
-
 # first environment
 env1 = gym.make('InvertedPendulum-v2')
 env1.seed(args.seed)
@@ -56,17 +55,19 @@ class Policy(nn.Module):
         self.value_head_env2 = nn.Linear(128, 1)
 
         # Teacher policies
-        self.teacher_mu1 = nn.Linear(128, 1)
+        '''self.teacher_mu1 = nn.Linear(128, 1)
         self.teacher_sigma1 = nn.Linear(128, 1)
         self.teacher_value1 = nn.Linear(128, 1)
 
         self.teacher_mu2 = nn.Linear(128, 1)
         self.teacher_sigma2 = nn.Linear(128, 1)
-        self.teacher_value2 = nn.Linear(128, 1)
+        self.teacher_value2 = nn.Linear(128, 1)'''
 
-        self.saved_actions_student = {1: [], 2: []}
-        self.saved_actions_teacher = {1: [], 2: []}
-        self.rewards_student = {1: [], 2: []}
+        self.saved_actions_student = []
+        # self.saved_actions_teacher = {1: [], 2: []}
+        self.samples_student = []
+        self.samples_teacher = {1: [], 2: []}
+        self.rewards_student = []
         self.rewards_teacher = {1: [], 2: []}
         self.entropies = []
 
@@ -74,10 +75,10 @@ class Policy(nn.Module):
         x = F.relu(self.affine1(x))
         return self.mu_head_env1(x), F.softplus(self.sigma2_head_env1(x)),\
                self.mu_head_env2(x), F.softplus(self.sigma2_head_env2(x)),\
-               self.value_head_env1(x), self.value_head_env2(x), \
-               self.teacher_mu1(x), self.teacher_sigma1(x), \
-               self.teacher_mu2(x), self.teacher_sigma2(x), \
-               self.teacher_value1(x), self.teacher_value2(x)
+               self.value_head_env1(x), self.value_head_env2(x)
+               # self.teacher_mu1(x), self.teacher_sigma1(x), \
+               # self.teacher_mu2(x), self.teacher_sigma2(x), \
+               # self.teacher_value1(x), self.teacher_value2(x)
 
 
 model = Policy()
@@ -85,54 +86,66 @@ model = Policy()
 optimizer = optim.Adam(model.parameters(), lr=1e-3)
 eps = np.finfo(np.float32).eps.item()
 
-def select_action(state, env):
-    # Randomly use teacher / student for rollout
-    # choice = np.random.choice(2, p=rollout_prob)
-
+def select_action(state, env, teacher_mod):
     state = torch.from_numpy(state).float()
-    mu1, s1, mu2, s2, val1, val2, tmu1, ts1, tmu2, ts2, tval1, tval2 = \
-            model(state)
+    mu1, s1, mu2, s2, val1, val2 = model(state)
+    tmu1, ts1, tmu2, ts2, tval1, tval2 = teacher_mod(state)
 
     if env == 1:
         prob = Normal(tmu1, ts1.sqrt())
         entropy = 0.5*((ts1*2*pi).log()+1)
         action = prob.sample()
-        log_prob = prob.log_prob(action)
-        model.entropies.append(entropy)
-        model.saved_actions_teacher[1].append(SavedAction(log_prob,
-                                                          tval1))
+        log_prob_t = prob.log_prob(action)
+        # model.entropies.append(entropy)
+        # teacher_mod.saved_actions_env1.append(SavedAction(log_prob,
+        #                                                   tval1))
+        teacher_mod.saved_actions_env1.append((tmu1, ts1))
 
         prob = Normal(mu1, s1.sqrt())
         entropy = 0.5*((s1*2*pi).log()+1)
         action = prob.sample()
-        log_prob = prob.log_prob(action)
+        log_prob_s = prob.log_prob(action)
         model.entropies.append(entropy)
-        model.saved_actions_student[1].append(SavedAction(log_prob,
-                                                          val1))
+
+        model.samples_student.append((mu1, s1))
+
+        if np.random.randint(2) == 1:
+            model.saved_actions_student.append(SavedAction(log_prob_s,
+                                                           val1))
+        else:
+            model.saved_actions_student.append(SavedAction(log_prob_t,
+                                                           tval1))
+
     elif env == 2:
         prob = Normal(tmu2, ts2.sqrt())
         entropy = 0.5*((ts2*2*pi).log()+1)
         action = prob.sample()
-        log_prob = prob.log_prob(action)
-        model.entropies.append(entropy)
-        model.saved_actions_teacher[2].append(SavedAction(log_prob,
+        log_prob_t = prob.log_prob(action)
+        # model.entropies.append(entropy)
+        teacher_mod.saved_actions_env1.append(SavedAction(log_prob_t,
                                                           tval2))
+        # model.samples_teacher[2].append((tmu2, ts2))
         prob = Normal(mu2, s2.sqrt())
-        entropy = 0.5*((s2*2*pi).log()+1)
+        entropy = 0.5   *((s2*2*pi).log()+1)
         action = prob.sample()
-        log_prob = prob.log_prob(action)
+        log_prob_s = prob.log_prob(action)
         model.entropies.append(entropy)
-        model.saved_actions_student[2].append(SavedAction(log_prob,
-                                                          val2))
+        model.samples_student.append((mu2, s2))
+
+        if np.random.randint(2) == 1:
+            model.saved_actions_student.append(SavedAction(log_prob_s,
+                                                              val2))
+        else:
+            model.saved_actions_student.append(SavedAction(log_prob_t, val2))
     return action.item()
 
 
 def KL_MV_gaussian(mu_p, std_p, mu_q, std_q):
     kl = (std_q/std_p).log() + (std_p.pow(2)+(mu_p-mu_q).pow(2)) / \
             (2*std_q.pow(2)) - 0.5
-    # kl = kl.sum(1, keepdim=True) # sum across all dimensions
-    # kl = kl.mean() # take mean across all steps
-    return kl
+    kl2 = kl.sum() # sum across all dimensions
+    kl3 = kl2.mean() # take mean across all steps
+    return kl3
 
 
 def finish_episode(state):
@@ -142,12 +155,12 @@ def finish_episode(state):
     policy_losses = []
     value_losses = []
     for i in range(num_envs):
-        if i % 2 == 0:
-            saved_actions = model.saved_actions_student[1]
-            model_rewards = model.rewards_student[1]
-        else:
-            saved_actions = model.saved_actions_student[2]
-            model_rewards = model.rewards_student[2]
+        # if i % 2 == 0:
+        saved_actions = model.saved_actions_student
+        model_rewards = model.rewards_student
+        # else:
+        #     saved_actions = model.saved_actions_student[2]
+        #     model_rewards = model.rewards_student[2]
 
         R = torch.zeros(1, 1)
         R = Variable(R)
@@ -164,7 +177,7 @@ def finish_episode(state):
 
         for (log_prob, value), r in zip(saved_actions, rewards):
             # reward is the delta param
-            value += Variable(torch.randn(value.size()))
+            value = value + Variable(torch.randn(value.size()))
             reward = r - value.item()
             # theta
             # need gradient descent - so negative
@@ -174,14 +187,27 @@ def finish_episode(state):
             value_losses.append(F.smooth_l1_loss(value, torch.tensor([r])))
     optimizer.zero_grad()
     # sum of 2 losses?
+    teacher_mu = [j[0] for j in teacher_mod.saved_actions_env1]
+    # teacher_mu2 = [j[0] for j in teacher_mod.saved_actions_env2]
+    # teacher_mu = teacher_mu + teacher_mu2
+    #
+    teacher_sigma = [j[1].sqrt() for j in teacher_mod.saved_actions_env1]
+    # teacher_sigma2 = [j[1].sqrt() for j in teacher_mod.saved_actions_env2]
+    # teacher_sigma = teacher_sigma + teacher_sigma2
+    student_mu = [j[0] for j in model.samples_student]
+    # student_mu2 = [j[0] for j in model.samples_studenT]
+    # student_mu = student_mu + student_mu2
+    student_sigma = [j[1].sqrt() for j in model.samples_student]
+    # student_sigma2 = [j[1].sqrt() for j in model.samples_student]
+    # student_sigma = student_sigma + student_sigma2
+
     loss = (torch.stack(policy_losses).sum() + \
             0.5*torch.stack(value_losses).sum() - \
             torch.stack(model.entropies).sum() * 0.0001) + \
-            KL_MV_gaussian(torch.tensor(model.saved_actions_teacher[i]).mean(),
-                           torch.tensor(model.saved_actions_teacher[i]).std(),
-                           torch.tensor(model.saved_actions_student[i]).mean(),
-                           torch.tensor(model.saved_actions_student[i]).std())
-
+            KL_MV_gaussian(torch.tensor(teacher_mu),
+                           torch.tensor(teacher_sigma),
+                           torch.tensor(student_mu),
+                           torch.tensor(student_sigma))
     # compute gradients
     loss.backward()
 
@@ -189,18 +215,20 @@ def finish_episode(state):
 
     # train the NN
     optimizer.step()
-    del model.saved_actions_student[1][:]
-    del model.saved_actions_student[2][:]
+    del model.saved_actions_student[:]
     del model.entropies[:]
-    del model.rewards_student[1][:]
-    del model.rewards_student[2][:]
-    del model.rewards_teacher[1][:]
-    del model.rewards_teacher[2][:]
-    del model.saved_actions_teacher[1][:]
-    del model.saved_actions_teacher[2][:]
+    del model.rewards_student[:]
+    del teacher_mod.saved_actions_env1[:]
+    # del model.rewards_teacher[1][:]
+    # del model.rewards_teacher[2][:]
+    # del model.saved_actions_teacher[1][:]
+    # del model.saved_actions_teacher[2][:]
+    # del model.samples_teacher[1][:]
+    # del model.samples_teacher[2][:]
+    del model.samples_student[:]
 
 
-def main():
+def main(teacher):
     running_reward = 10
 
     for i_episode in count(1):
@@ -212,10 +240,10 @@ def main():
             if t % 2 == 0:
                 state = state1  # variable used for finishing
                 # train environment 1 half the time
-                action = select_action(state1, 1)
+                action = select_action(state1, 1, teacher)
                 state1, reward, done, _ = env1.step(action)
                 reward = max(min(reward, 1), -1)
-                model.rewards_student[1].append(reward)
+                model.rewards_student.append(reward)
                 if args.render:
                     env1.render()
                 if done:
@@ -223,10 +251,10 @@ def main():
             if t % 2 == 1:
                 # train environment 2 other half of the time
                 state = state2  # variable used for finishing
-                action = select_action(state2, 2)
+                action = select_action(state2, 2, teacher)
                 state2, reward, done, _ = env2.step(action)
                 reward = max(min(reward, 1), -1)
-                model.rewards_student[2].append(reward)
+                model.rewards_student.append(reward)
                 if args.render:
                     env2.render()
                 if done:
@@ -253,5 +281,94 @@ def main():
             break
 
 
+def normalized_columns_initializer(weights, std=1.0):
+    out = torch.randn(weights.size())
+    out *= std / torch.sqrt(out.pow(2).sum(1).expand_as(out))
+    return out
+
+
+def weights_init(m):
+    classname = m.__class__.__name__
+    if classname.find('Conv') != -1:
+        weight_shape = list(m.weight.data.size())
+        fan_in = np.prod(weight_shape[1:4])
+        fan_out = np.prod(weight_shape[2:4]) * weight_shape[0]
+        w_bound = np.sqrt(6. / (fan_in + fan_out))
+        m.weight.data.uniform_(-w_bound, w_bound)
+        m.bias.data.fill_(0)
+    elif classname.find('Linear') != -1:
+        weight_shape = list(m.weight.data.size())
+        fan_in = weight_shape[1]
+        fan_out = weight_shape[0]
+        w_bound = np.sqrt(6. / (fan_in + fan_out))
+        m.weight.data.uniform_(-w_bound, w_bound)
+        m.bias.data.fill_(0)
+
+
+def normal(x, mu, sigma_sq):
+    a = (-1*(Variable(x)-mu).pow(2)/(2*sigma_sq)).exp()
+    b = 1/(2*sigma_sq*pi.expand_as(sigma_sq)).sqrt()
+    return a*b
+
+class TeacherPolicy(nn.Module):
+    def __init__(self):
+        super(TeacherPolicy, self).__init__()
+        # shared layer
+        self.affine1 = nn.Linear(4, 128)
+        # 2 outputs because 2D space
+        # mu and sigma head for environment 1
+        self.mu_head_env1 = nn.Linear(128, 1)
+        self.sigma2_head_env1 = nn.Linear(128, 1)
+        # mu and sigma head for environment 2
+        self.mu_head_env2 = nn.Linear(128, 1)
+        self.sigma2_head_env2 = nn.Linear(128, 1)
+        # define the value heads
+        self.value_head_env1 = nn.Linear(128, 1)
+        self.value_head_env2 = nn.Linear(128, 1)
+
+        # initialize environment 1 head
+        self.apply(weights_init)
+        self.mu_head_env1.weight.data = normalized_columns_initializer\
+            (self.mu_head_env1.weight.data, 0.01)
+        self.sigma2_head_env1.weight.data = normalized_columns_initializer\
+            (self.sigma2_head_env1.weight.data, 0.01)
+        self.mu_head_env1.bias.data.fill_(0)
+        self.sigma2_head_env1.bias.data.fill_(0)
+
+        # initialize environment 2 head
+        self.apply(weights_init)
+        self.mu_head_env2.weight.data = normalized_columns_initializer\
+            (self.mu_head_env2.weight.data, 0.01)
+        self.sigma2_head_env2.weight.data = normalized_columns_initializer\
+            (self.sigma2_head_env2.weight.data, 0.01)
+        self.mu_head_env2.bias.data.fill_(0)
+        self.sigma2_head_env2.bias.data.fill_(0)
+
+        #initialization for the value heads
+        self.value_head_env1.weight.data = normalized_columns_initializer(self.value_head_env1.weight.data, 1.0)
+        self.value_head_env1.bias.data.fill_(0)
+
+        self.value_head_env2.weight.data = normalized_columns_initializer(self.value_head_env2.weight.data, 1.0)
+        self.value_head_env2.bias.data.fill_(0)
+
+        # initialize lists for holding run information
+        self.saved_actions_env1 = []
+        self.entropies = []
+        self.rewards_env1 = []
+        self.saved_actions_env2 = []
+        self.rewards_env2 = []
+
+    def forward(self, x):
+        '''updated to have 5 return values (2 for each action head one for
+        value'''
+        x = F.relu(self.affine1(x))
+        return self.mu_head_env1(x), F.softplus(self.sigma2_head_env1(x)),\
+               self.mu_head_env2(x), F.softplus(self.sigma2_head_env2(x)),\
+               self.value_head_env1(x), self.value_head_env2(x)
+
+
 if __name__ == '__main__':
-    main()
+    teacher = torch.load('teacher.pt')
+    teacher_mod = TeacherPolicy()
+    teacher_mod.load_state_dict(teacher['model_state_dict'])
+    main(teacher_mod)
