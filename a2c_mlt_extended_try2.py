@@ -129,7 +129,8 @@ class Policy(nn.Module):
 
         # initialize lists for holding run information
         self.saved_actions = [[] for i in range(num_envs)]
-        self.entropies = [[] for i in range(num_envs)]
+        #self.entropies = [[] for i in range(num_envs)]
+        self.entropies = []
         self.rewards = [[] for i in range(num_envs)]
 
 
@@ -149,7 +150,7 @@ test = False
 
 model = Policy()
 # learning rate - might be useful to change
-optimizer = optim.Adam(model.parameters(), lr=3e-3)
+optimizer = optim.Adam(model.parameters(), lr=1e-3)
 eps = np.finfo(np.float32).eps.item()
 
 
@@ -187,7 +188,8 @@ def select_action(state, env_idx):
     entropy = 0.5*((sigma*2*pi).log()+1)
     action = prob.sample()
     log_prob = prob.log_prob(action)
-    model.entropies[env_idx].append(entropy)
+    model.entropies.append(entropy)
+    #model.entropies[env_idx].append(entropy)
     #print(env_idx)
     #print(model.saved_actions)
     saved_actions = model.saved_actions[env_idx]
@@ -201,8 +203,8 @@ def finish_episode():
     policy_losses = []
     value_losses = []
     entropy_sum = 0
-    lengths = np.array([len(model.rewards[i]) for i in range(num_envs)])
-    length_discount = lengths/np.sum(lengths)
+    #lengths = np.array([len(model.rewards[i]) for i in range(num_envs)])
+    #length_discount = lengths/np.sum(lengths)
     for env_idx in range(num_envs):
         saved_actions = model.saved_actions[env_idx]
         model_rewards = model.rewards[env_idx]
@@ -225,15 +227,15 @@ def finish_episode():
             reward = r - value.item()
             # theta
             # need gradient descent - so negative
-            policy_losses.append(-log_prob * reward / length_discount[env_idx])
+            policy_losses.append(-log_prob * reward) #/ length_discount[env_idx])
             # https://pytorch.org/docs/master/nn.html#torch.nn.SmoothL1Loss
             # feeds a weird difference between value and the reward
-            value_losses.append(F.smooth_l1_loss(value, torch.tensor([r])) / length_discount[env_idx])
-            entropy_sum += torch.stack(model.entropies[env_idx]).sum() / length_discount[env_idx]
+            value_losses.append(F.smooth_l1_loss(value, torch.tensor([r]))) #/ length_discount[env_idx])
+            #entropy_sum += torch.stack(model.entropies[env_idx]).sum() #/ length_discount[env_idx]
     optimizer.zero_grad()
     # sum of 2 losses?
     loss = (torch.stack(policy_losses).sum() + 0.5*torch.stack(value_losses).sum() \
-            - entropy_sum * 0.0001)
+            - torch.stack(model.entropies).sum() * 0.0001) / num_envs
 
     # Debugging
     if False:
@@ -260,7 +262,8 @@ def finish_episode():
     # train the NN
     optimizer.step()
     model.saved_actions = [[] for i in range(num_envs)]
-    model.entropies = [[] for i in range(num_envs)]
+    del model.entropies[:]
+    #model.entropies = [[] for i in range(num_envs)]
     model.rewards = [[] for i in range(num_envs)]
 
 
