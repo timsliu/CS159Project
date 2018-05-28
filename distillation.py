@@ -63,11 +63,11 @@ class Policy(nn.Module):
         self.teacher_sigma2 = nn.Linear(128, 1)
         self.teacher_value2 = nn.Linear(128, 1)'''
 
-        self.saved_actions_student = []
+        self.saved_actions_student = {1: [], 2:[]}
         # self.saved_actions_teacher = {1: [], 2: []}
         self.samples_student = []
         self.samples_teacher = {1: [], 2: []}
-        self.rewards_student = []
+        self.rewards_student = {1: [], 2: []}
         self.rewards_teacher = {1: [], 2: []}
         self.entropies = []
 
@@ -110,10 +110,10 @@ def select_action(state, env, teacher_mod):
         model.samples_student.append((mu1, s1))
 
         if np.random.randint(2) == 1:
-            model.saved_actions_student.append(SavedAction(log_prob_s,
+            model.saved_actions_student[env].append(SavedAction(log_prob_s,
                                                            val1))
         else:
-            model.saved_actions_student.append(SavedAction(log_prob_t,
+            model.saved_actions_student[env].append(SavedAction(log_prob_t,
                                                            tval1))
 
     elif env == 2:
@@ -133,10 +133,10 @@ def select_action(state, env, teacher_mod):
         model.samples_student.append((mu2, s2))
 
         if np.random.randint(2) == 1:
-            model.saved_actions_student.append(SavedAction(log_prob_s,
+            model.saved_actions_student[env].append(SavedAction(log_prob_s,
                                                               val2))
         else:
-            model.saved_actions_student.append(SavedAction(log_prob_t, val2))
+            model.saved_actions_student[env].append(SavedAction(log_prob_t, val2))
     return action.item()
 
 
@@ -156,8 +156,8 @@ def finish_episode(state):
     value_losses = []
     for i in range(num_envs):
         # if i % 2 == 0:
-        saved_actions = model.saved_actions_student
-        model_rewards = model.rewards_student
+        saved_actions = model.saved_actions_student[i+1]
+        model_rewards = model.rewards_student[i+1]
         # else:
         #     saved_actions = model.saved_actions_student[2]
         #     model_rewards = model.rewards_student[2]
@@ -215,9 +215,11 @@ def finish_episode(state):
 
     # train the NN
     optimizer.step()
-    del model.saved_actions_student[:]
+    del model.saved_actions_student[1][:]
+    del model.saved_actions_student[2][:]
     del model.entropies[:]
-    del model.rewards_student[:]
+    del model.rewards_student[1][:]
+    del model.rewards_student[2][:]
     del teacher_mod.saved_actions_env1[:]
     # del model.rewards_teacher[1][:]
     # del model.rewards_teacher[2][:]
@@ -243,7 +245,7 @@ def main(teacher):
                 action = select_action(state1, 1, teacher)
                 state1, reward, done, _ = env1.step(action)
                 reward = max(min(reward, 1), -1)
-                model.rewards_student.append(reward)
+                model.rewards_student[t%2+1].append(reward)
                 if args.render:
                     env1.render()
                 if done:
@@ -254,7 +256,7 @@ def main(teacher):
                 action = select_action(state2, 2, teacher)
                 state2, reward, done, _ = env2.step(action)
                 reward = max(min(reward, 1), -1)
-                model.rewards_student.append(reward)
+                model.rewards_student[t%2+1].append(reward)
                 if args.render:
                     env2.render()
                 if done:
