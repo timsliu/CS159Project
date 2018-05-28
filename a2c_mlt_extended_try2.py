@@ -312,7 +312,8 @@ def main():
             print("All solved! Running reward is now {} and "
               "the last episode runs to {} time steps!".format(running_reward, t))
             break
-
+    torch.save(model.state_dict(), envs_names[0] + '.pt')
+    
 
 if __name__ == '__main__':
     main()
