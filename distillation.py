@@ -66,9 +66,9 @@ class Policy(nn.Module):
         self.saved_actions_student = {1: [], 2:[]}
         # self.saved_actions_teacher = {1: [], 2: []}
         self.samples_student = []
-        self.samples_teacher = {1: [], 2: []}
+        # self.samples_teacher = {1: [], 2: []}
         self.rewards_student = {1: [], 2: []}
-        self.rewards_teacher = {1: [], 2: []}
+        # self.rewards_teacher = {1: [], 2: []}
         self.entropies = []
 
     def forward(self, x):
@@ -86,7 +86,7 @@ model = Policy()
 optimizer = optim.Adam(model.parameters(), lr=1e-3)
 eps = np.finfo(np.float32).eps.item()
 
-def select_action(state, env, teacher_mod):
+def select_action(state, env, teacher_mod, teacher_student):
     state = torch.from_numpy(state).float()
     mu1, s1, mu2, s2, val1, val2 = model(state)
     tmu1, ts1, tmu2, ts2, tval1, tval2 = teacher_mod(state)
@@ -109,7 +109,8 @@ def select_action(state, env, teacher_mod):
 
         model.samples_student.append((mu1, s1))
 
-        if np.random.randint(2) == 1:
+        if teacher_student == 1:
+            # Randomly save student
             model.saved_actions_student[env].append(SavedAction(log_prob_s,
                                                            val1))
         else:
@@ -132,20 +133,21 @@ def select_action(state, env, teacher_mod):
         model.entropies.append(entropy)
         model.samples_student.append((mu2, s2))
 
-        if np.random.randint(2) == 1:
+        if teacher_student == 1:
+            # Randomly save student or teacher
             model.saved_actions_student[env].append(SavedAction(log_prob_s,
                                                               val2))
         else:
-            model.saved_actions_student[env].append(SavedAction(log_prob_t, val2))
+            model.saved_actions_student[env].append(SavedAction(log_prob_t, tval2))
     return action.item()
 
 
 def KL_MV_gaussian(mu_p, std_p, mu_q, std_q):
     kl = (std_q/std_p).log() + (std_p.pow(2)+(mu_p-mu_q).pow(2)) / \
             (2*std_q.pow(2)) - 0.5
-    kl2 = kl.sum() # sum across all dimensions
-    kl3 = kl2.mean() # take mean across all steps
-    return kl3
+    kl = kl.sum() # sum across all dimensions
+    kl = kl.mean() # take mean across all steps
+    return kl
 
 
 def finish_episode(state):
@@ -177,7 +179,7 @@ def finish_episode(state):
 
         for (log_prob, value), r in zip(saved_actions, rewards):
             # reward is the delta param
-            value = value + Variable(torch.randn(value.size()))
+            # value = value + Variable(torch.randn(value.size()))
             reward = r - value.item()
             # theta
             # need gradient descent - so negative
@@ -211,7 +213,7 @@ def finish_episode(state):
     # compute gradients
     loss.backward()
 
-    nn.utils.clip_grad_norm_(model.parameters(), 40)
+    nn.utils.clip_grad_norm_(model.parameters(), 30)
 
     # train the NN
     optimizer.step()
@@ -237,12 +239,13 @@ def main(teacher):
         # random initialization
         state1 = env1.reset()
         state2 = env2.reset()
+        teacher_student = np.random.randint(2)
 
         for t in range(10000):  # Don't infinite loop while learning
             if t % 2 == 0:
                 state = state1  # variable used for finishing
                 # train environment 1 half the time
-                action = select_action(state1, 1, teacher)
+                action = select_action(state1, 1, teacher, teacher_student)
                 state1, reward, done, _ = env1.step(action)
                 reward = max(min(reward, 1), -1)
                 model.rewards_student[t%2+1].append(reward)
@@ -253,7 +256,7 @@ def main(teacher):
             if t % 2 == 1:
                 # train environment 2 other half of the time
                 state = state2  # variable used for finishing
-                action = select_action(state2, 2, teacher)
+                action = select_action(state2, 2, teacher, teacher_student)
                 state2, reward, done, _ = env2.step(action)
                 reward = max(min(reward, 1), -1)
                 model.rewards_student[t%2+1].append(reward)
