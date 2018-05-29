@@ -25,8 +25,8 @@ import torch.optim as optim
 from torch.distributions import Categorical
 from torch.autograd import Variable
 from torch.distributions.normal import Normal
-from a2c_mlt_extended_try2 import Policy as Teacher
-from a2c_mlt_extended_try2 import weights_init, normalized_columns_initializer
+from hard_param import Policy as Teacher
+from hard_param import weights_init, normalized_columns_initializer
 
 parser = argparse.ArgumentParser(description='PyTorch actor-critic example')
 parser.add_argument('--gamma', type=float, default=0.99, metavar='G',
@@ -64,16 +64,23 @@ else:
 
 for env in envs:
     env.seed(args.seed)
-# somehow does not load
-teacherNNs = []
+
+
+
+def freeze_model(model):
+    for param in model.parameters():
+        param.requires_grad = False
+    return
+
+teacherNNs = [0 for i in range(num_envs)]
 for i, name in enumerate(envs_names):
     teacher = torch.load(name + '.pt')
-    teacher_mod = Teacher()
+    teacher_mod = Teacher(1)
     teacher_mod.load_state_dict(teacher)
-    teacherNN[i] = teacher_mod
+    freeze_model(teacher_mod)
+    teacherNNs[i] = teacher_mod
 
 torch.manual_seed(args.seed)
-
 
 
 class Policy(nn.Module):
@@ -135,7 +142,7 @@ def select_action(state, env_idx, roll):
     return - action to take'''
 
     state = torch.from_numpy(state).float()
-    tmodel = teacherNN[env_idx]
+    tmodel = teacherNNs[env_idx]
     mu, sigma, state_value = model(state, env_idx)
     tmu, tsigma, tvalue = tmodel(state, 0) # only the one environment
 
@@ -164,12 +171,18 @@ def finish_episode():
 
     optimizer.zero_grad()
     # sum of 2 losses?
-    loss = KL_MV_gaussian(torch.tensor(model.tmu), torch.tensor(model.tsigma),
-        torch.tensor(model.mu), torch.tensor(model.sigma))
+    divergence = [0 for i in range(num_envs)]
+    for env_idx in range(num_envs):
+        divergence[env_idx] = KL_MV_gaussian(torch.tensor(model.tmu[env_idx]),
+            torch.tensor(model.tsigma[env_idx]),
+            torch.tensor(model.mu[env_idx]), torch.tensor(model.sigma[env_idx]))
 
+    loss = torch.stack(divergence).sum()
     # Debugging
     if False:
+        print(divergence[0].data)
         print(loss, 'loss')
+        print()
     # compute gradients
     loss.backward()
 
@@ -188,7 +201,6 @@ def finish_episode():
             print('##')
             #print(model.affine1.weight.grad)
 
-
     # train the NN
     optimizer.step()
     model.mu = [[] for i in range(num_envs)]
@@ -196,40 +208,13 @@ def finish_episode():
     model.tmu = [[] for i in range(num_envs)]
     model.tsigma = [[] for i in range(num_envs)]
 
-def KL_MV_gaussian(mu_p, std_p, mu_q, std_q):
-    kl = (std_q/std_p).log() + (std_p.pow(2)+(mu_p-mu_q).pow(2)) / \
-            (2*std_q.pow(2)) - 0.5
+def KL_MV_gaussian(tmu, tstd, mu, std):
+    kl = (tstd/std).log() + (std.pow(2)+(tmu-mu).pow(2)) / \
+            (2*tstd.pow(2)) - 0.5
     kl = kl.sum() # sum across all dimensions
     kl = kl.mean() # take mean across all steps
-    return kl
+    return Variable(kl.data, requires_grad=True)
 
-class Teacher(nn.Module):
-    def __init__(self):
-        super(Teacher, self).__init__()
-        self.num_envs = num_envs
-        # shared layer
-        self.affine1 = nn.Linear(4, 128)
-        # not shared layers
-        self.mu_heads = nn.ModuleList([nn.Linear(128, 1) for i in range(self.num_envs)])
-        self.sigma2_heads = nn.ModuleList([nn.Linear(128, 1) for i in range(self.num_envs)])
-        self.value_heads = nn.ModuleList([nn.Linear(128, 1) for i in range(self.num_envs)])
-
-        self.apply(weights_init)
-        for i in range(self.num_envs):
-            mu = self.mu_heads[i]
-            sigma = self.sigma2_heads[i]
-            value = self.value_heads[i]
-            mu.data = normalized_columns_initializer(mu.weight.data, 0.01)
-            mu.bias.data.fill_(0)
-            sigma.bias.data.fill_(0)
-            value.weight.data = normalized_columns_initializer(value.weight.data, 1.0)
-            value.bias.data.fill_(0)
-
-        # initialize lists for holding run information
-        self.saved_actions = [[] for i in range(num_envs)]
-        #self.entropies = [[] for i in range(num_envs)]
-        self.entropies = []
-        self.rewards = [[] for i in range(num_envs)]
 
 def main():
     running_reward = 10
