@@ -92,25 +92,18 @@ class Policy(nn.Module):
         # not shared layers
         self.mu_heads = nn.ModuleList([nn.Linear(128, 1) for i in range(self.num_envs)])
         self.sigma2_heads = nn.ModuleList([nn.Linear(128, 1) for i in range(self.num_envs)])
-        self.value_heads = nn.ModuleList([nn.Linear(128, 1) for i in range(self.num_envs)])
 
         self.apply(weights_init)
         for i in range(self.num_envs):
             mu = self.mu_heads[i]
             sigma = self.sigma2_heads[i]
-            value = self.value_heads[i]
             mu.data = normalized_columns_initializer(mu.weight.data, 0.01)
             mu.bias.data.fill_(0)
             sigma.bias.data.fill_(0)
-            value.weight.data = normalized_columns_initializer(value.weight.data, 1.0)
-            value.bias.data.fill_(0)
+
 
         # initialize lists for holding run information
-
-        self.mu = [[] for i in range(num_envs)]
-        self.sigma = [[] for i in range(num_envs)]
-        self.tmu = [[] for i in range(num_envs)]
-        self.tsigma = [[] for i in range(num_envs)]
+        self.div = [[] for i in range(num_envs)]
 
 
 
@@ -120,9 +113,8 @@ class Policy(nn.Module):
         x = F.relu(self.affine1(x))
         mu = self.mu_heads[env_idx](x)
         sigma2 = self.sigma2_heads[env_idx](x)
-        value = self.value_heads[env_idx](x)
         sigma = F.softplus(sigma2)
-        return mu, sigma, value
+        return mu, sigma
 
 
 # for debugging
@@ -143,7 +135,7 @@ def select_action(state, env_idx, roll):
 
     state = torch.from_numpy(state).float()
     tmodel = teacherNNs[env_idx]
-    mu, sigma, state_value = model(state, env_idx)
+    mu, sigma = model(state, env_idx)
     tmu, tsigma, tvalue = tmodel(state, 0) # only the one environment
 
     # use student
@@ -155,10 +147,7 @@ def select_action(state, env_idx, roll):
 
     action = prob.sample()
 
-    model.mu[env_idx].append(mu)
-    model.tmu[env_idx].append(tmu)
-    model.sigma[env_idx].append(sigma.sqrt())
-    model.tsigma[env_idx].append(tsigma.sqrt())
+    model.div[env_idx].append(torch.div(tsigma.sqrt(),sigma.sqrt()).log() + torch.div(sigma+(tmu-mu).pow(2),tsigma*2) - 0.5)
     return action.item()
 
 
@@ -166,24 +155,19 @@ def finish_episode():
     policy_losses = []
     value_losses = []
     entropy_sum = 0
-    #lengths = np.array([len(model.rewards[i]) for i in range(num_envs)])
-    #length_discount = lengths/np.sum(lengths)
+    loss = torch.zeros(1, 1)
+    loss = Variable(loss)
 
-    optimizer.zero_grad()
-    # sum of 2 losses?
-    divergence = [0 for i in range(num_envs)]
     for env_idx in range(num_envs):
-        divergence[env_idx] = KL_MV_gaussian(torch.tensor(model.tmu[env_idx]),
-            torch.tensor(model.tsigma[env_idx]),
-            torch.tensor(model.mu[env_idx]), torch.tensor(model.sigma[env_idx]))
+        loss = loss + torch.stack(model.div[env_idx]).sum()
 
-    loss = torch.stack(divergence).sum()
     # Debugging
     if False:
         print(divergence[0].data)
         print(loss, 'loss')
         print()
     # compute gradients
+    optimizer.zero_grad()
     loss.backward()
 
     nn.utils.clip_grad_norm_(model.parameters(), 30)
@@ -193,7 +177,7 @@ def finish_episode():
         print('grad')
         for i in range(num_envs):
             print(i)
-            print(model.mu_head[i].weight.grad)
+            print(model.mu_heads[i].weight)
             print('##')
             #print(model.sigma2_head[i].weight.grad)
             print('##')
@@ -203,17 +187,7 @@ def finish_episode():
 
     # train the NN
     optimizer.step()
-    model.mu = [[] for i in range(num_envs)]
-    model.sigma = [[] for i in range(num_envs)]
-    model.tmu = [[] for i in range(num_envs)]
-    model.tsigma = [[] for i in range(num_envs)]
-
-def KL_MV_gaussian(tmu, tstd, mu, std):
-    kl = (tstd/std).log() + (std.pow(2)+(tmu-mu).pow(2)) / \
-            (2*tstd.pow(2)) - 0.5
-    kl = kl.sum() # sum across all dimensions
-    kl = kl.mean() # take mean across all steps
-    return Variable(kl.data, requires_grad=True)
+    model.div = [[] for i in range(num_envs)]
 
 
 def main():
@@ -222,8 +196,13 @@ def main():
     roll_length = np.array([0 for i in range(num_envs)])
     trained = False
     trained_envs = np.array([False for i in range(num_envs)])
-    for i_episode in count(1):
-        roll = np.random.randint(2)
+    for i_episode in range(6000):
+        p = np.random.random()
+        if p < 0.5:
+            roll = 0
+        else:
+            roll = 1
+        # roll = np.random.randint(2)
         length = 0
         for env_idx, env in enumerate(envs):
             state = env.reset()
@@ -261,6 +240,8 @@ def main():
               "the last episode runs to {} time steps!".format(running_reward, t))
             break
 
+    if i_episode == 5999:
+        print('Well that failed')
 
 if __name__ == '__main__':
     main()
