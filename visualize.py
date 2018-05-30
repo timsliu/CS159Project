@@ -21,6 +21,9 @@
 import pickle
 import matplotlib.pyplots as plt
 
+# current directory to return to each time
+HOME = os.getcwd()
+
 
 
 def init_list(env_names):
