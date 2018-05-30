@@ -9,8 +9,6 @@
 #
 #
 # Revision History
-# Ayya       05/27/18    Changed rollouts in main()
-# Ayya       05/26/18    Fixed errors and made it usable for many envs
 # Tim Liu    05/23/18    copied from a2c_cont.py and renamed
 # Tim Liu    05/23/18    added second environment env2
 # Tim Liu    05/23/18    added second sigma and mu head for Policy class
@@ -20,6 +18,12 @@
 # Tim Liu    05/23/18    changed main loop to allow for multitasking
 # Tim Liu    05/26/18    changed print statement in select_action for if
 #                        sigma is NaN to reflect new sigma head attribute names
+# Ayya       05/26/18    Fixed errors and made it usable for many envs
+# Ayya       05/27/18    Changed rollouts in main()
+# Tim Liu    05/30/18    added calls to functions used for recording run
+#                        data; changes are marked with (FOR_RECORD)
+
+
 
 
 
@@ -29,6 +33,9 @@ import gym
 import numpy as np
 from itertools import count
 from collections import namedtuple
+
+# used for recording run time data (1)
+import visualize
 
 import torch
 import torch.nn as nn
@@ -51,6 +58,13 @@ parser.add_argument('--log-interval', type=int, default=10, metavar='N',
 parser.add_argument('--envs', action='append', nargs='+', type=str)
 
 
+
+# global lists for recording run time behavior - initialized by init_list
+# (FOR_RECORD)
+length_records = []    # length of each run for each episode
+rr_records = []        # running rewards for each episode
+
+
 args = parser.parse_args()
 
 num_envs = 0
@@ -68,15 +82,10 @@ if num_envs == 0:
     env2 = gym.make('HalfInvertedPendulum-v0')
     num_envs = 2
     envs = [env1, env2]
+    envs_names = ['InvertedPendulum-v2', 'HalfInvertedPendulum-v0']
 
 else:
     envs = [gym.make(envs_names[i]) for i in range(num_envs)]
-
-for env in envs:
-    env.seed(args.seed)
-
-
-torch.manual_seed(args.seed)
 
 
 SavedAction = namedtuple('SavedAction', ['log_prob', 'value'])
@@ -269,6 +278,12 @@ def finish_episode():
 
 
 def main():
+    '''main function. Training on multiple environments performed in a nested
+    loop.'''
+    # initialize the record lists to the proper length (FOR_RECORD)
+    length_records = visualize.init_list(envs_names)
+    rr_records = visualize.init_list(envs_names)
+    
     running_reward = 10
     run_reward = np.array([10 for i in range(num_envs)])
     roll_length = np.array([0 for i in range(num_envs)])
@@ -292,9 +307,15 @@ def main():
                     roll_length[env_idx] = t
                     break
 
-        # update our running reward
+        # running reward is combination across all environments
         running_reward = running_reward * 0.99 + length / num_envs * 0.01
+        # run reward is array of the running reward for a single environment
         run_reward = run_reward * 0.99 + roll_length * 0.01
+        
+        # call function to record run data (FOR_RECORD)
+        length_records, rr_records = visualize.update_records(\
+            roll_length, run_reward, length_records, rr_records)
+        
         finish_episode()
         if i_episode % args.log_interval == 0:
             print('Episode {}\tAverage length per environment {}'.format(i_episode, run_reward))
@@ -313,6 +334,16 @@ def main():
               "the last episode runs to {} time steps!".format(running_reward, t))
             break
     torch.save(model.state_dict(), '_'.join(envs_names) + '.pt')
+    
+    # call helper function to save the run time data (FOR_RECORD)
+    if len(envs_names == 1):
+        # running with single environment is baseline
+        visualize.pickle_list('baseline', envs_names, length_records,\
+                              rr_records)                
+    else:
+        # otherwise it's hard parameter sharing
+        visualize.pickle_list('hard_param', envs_names, length_records,\
+                              rr_records)
 
 
 if __name__ == '__main__':
