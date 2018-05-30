@@ -29,6 +29,8 @@
 # Tim Liu    05/28/18    updated main loop to train env1 first and then env2
 # Tim Liu    05/28/18    modified finish_episode to freeze the affine layer
 #                        after the first environment is trained
+# Tim Liu    05/28/18    removed manual seeding of environment and torch
+# Tim Liu    05/28/18    corrected bug so affine layer actually freezes
 
 
 
@@ -71,10 +73,7 @@ pi = Variable(torch.FloatTensor([math.pi]))
 env1 = gym.make('InvertedPendulum-v2')
 #second environment
 env2 = gym.make('HalfInvertedPendulum-v0')
-# seed environments
-env1.seed(args.seed)
-env2.seed(args.seed)
-torch.manual_seed(args.seed)
+
 
 
 SavedAction = namedtuple('SavedAction', ['log_prob', 'value'])
@@ -217,10 +216,17 @@ def finish_episode(freeze):
             - torch.stack(model.entropies).sum() * 0.0001)
 
     # check if the affine layer should be updated
-    if freeze:
         # do not update the affine layer
-        model.affine1.requires_grad = False
-        
+    model.affine1.requires_grad = False
+    
+    # iterate through the layers
+    p_num = 0
+    for param in model.parameters():
+        # freeze the first layer for finetuning
+        if ((p_num == 0) and freeze):
+            param.requires_grad = False
+        p_num += 1
+            
     loss.backward()    #compute the gradients
     nn.utils.clip_grad_norm_(model.parameters(), 30)
 
