@@ -322,10 +322,10 @@ def main():
 
 
         for env_idx, env in enumerate(envs):
-            if run_reward[env_idx] > env.spec.reward_threshold and trained_envs[env_idx] == False:
+            if run_reward[env_idx] > 30 and trained_envs[env_idx] == False:
                 print("{} solved!".format(envs_names[env_idx]))
                 trained_envs[env_idx] = True
-            if run_reward[env_idx] < env.spec.reward_threshold and trained_envs[env_idx] == True:
+            if run_reward[env_idx] < 30 and trained_envs[env_idx] == True:
                 print("{} not solved!".format(envs_names[env_idx]))
                 trained_envs[env_idx] = False
 
@@ -336,7 +336,7 @@ def main():
     torch.save(model.state_dict(), '_'.join(envs_names) + '.pt')
     
     # call helper function to save the run time data (FOR_RECORD)
-    if len(envs_names == 1):
+    if len(envs_names) == 1:
         # running with single environment is baseline
         visualize.pickle_list('baseline', envs_names, length_records,\
                               rr_records)                
