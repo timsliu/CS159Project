@@ -101,10 +101,10 @@ class Policy(nn.Module):
 
 
         # initialize lists for holding run information
-        self.div = [[] for i in range(self.num_envs)]
+        #self.div = [[] for i in range(self.num_envs)]
         self.saved_actions = [[] for i in range(self.num_envs)]
         #self.entropies = [[] for i in range(num_envs)]
-        self.entropies = [[] for i in range(self.num_envs)]
+        #self.entropies = [[] for i in range(self.num_envs)]
         self.rewards = [[] for i in range(self.num_envs)]
         self.log_prob = [[] for i in range(self.num_envs)]
         self.kl = []
@@ -162,12 +162,12 @@ def select_action(state, env_idx):
     log_prob = prob.log_prob(action)
     #log_prob_pi0 = -torch.div((action - mu_t).pow(2), 2*sigma_t) - 1/2*(2*pi*sigma_t).log()
     model.saved_actions[env_idx].append(SavedAction(log_prob, value))
-    model.entropies[env_idx].append(entropy)
+    #model.entropies[env_idx].append(entropy)
 
 
-    model.div[env_idx].append(torch.div(sigma_t.sqrt(), args.alpha*sigma_t.sqrt()+ args.beta*sigma.sqrt()).log() + \
-             (args.alpha*sigma_t.sqrt()+args.beta*sigma.sqrt()).pow(2) + \
-             torch.div(((1-args.alpha)*mu_t-(args.beta)*mu).pow(2),(2*sigma_t)) - 0.5)
+    #model.div[env_idx].append(torch.div(sigma_t.sqrt(), args.alpha*sigma_t.sqrt()+ args.beta*sigma.sqrt()).log() + \
+    #         (args.alpha*sigma_t.sqrt()+args.beta*sigma.sqrt()).pow(2) + \
+    #         torch.div(((1-args.alpha)*mu_t-(args.beta)*mu).pow(2),(2*sigma_t)) - 0.5)
     #model.log_prob[env_idx].append(log_prob_pi0)
     model.kl.append(torch.div(sigma_t.sqrt(), args.alpha*sigma_t.sqrt()+ args.beta*sigma.sqrt()).log() + \
              (args.alpha*sigma_t.sqrt()+args.beta*sigma.sqrt()).pow(2) + \
@@ -246,9 +246,9 @@ def finish_episode():
     # train the NN
     optimizer.step()
 
-    model.div = [[] for i in range(model.num_envs)]
+    #model.div = [[] for i in range(model.num_envs)]
     model.saved_actions = [[] for i in range(model.num_envs)]
-    model.entropies = [[] for i in range(model.num_envs)]
+    #model.entropies = [[] for i in range(model.num_envs)]
     model.rewards = [[] for i in range(model.num_envs)]
     model.log_prob = [[] for i in range(model.num_envs)]
     model.kl = []
