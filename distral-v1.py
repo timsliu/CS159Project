@@ -159,6 +159,8 @@ class Policy(nn.Module):
         self.entropies = [[] for i in range(self.num_envs)]
         self.rewards = [[] for i in range(self.num_envs)]
         self.log_prob = [[] for i in range(self.num_envs)]
+        self.kl = []
+        self.ent = []
 
 
     def forward(self, y, env_idx):
@@ -214,12 +216,15 @@ def select_action(state, env_idx):
     model.saved_actions[env_idx].append(SavedAction(log_prob, value))
     model.entropies[env_idx].append(entropy)
 
-    
+
     model.div[env_idx].append(torch.div(sigma_t.sqrt(), args.alpha*sigma_t.sqrt()+ args.beta*sigma.sqrt()).log() + \
              (args.alpha*sigma_t.sqrt()+args.beta*sigma.sqrt()).pow(2) + \
              torch.div(((1-args.alpha)*mu_t-(args.beta)*mu).pow(2),(2*sigma_t)) - 0.5)
     #model.log_prob[env_idx].append(log_prob_pi0)
-
+    model.kl.append(torch.div(sigma_t.sqrt(), args.alpha*sigma_t.sqrt()+ args.beta*sigma.sqrt()).log() + \
+             (args.alpha*sigma_t.sqrt()+args.beta*sigma.sqrt()).pow(2) + \
+             torch.div(((1-args.alpha)*mu_t-(args.beta)*mu).pow(2),(2*sigma_t)) - 0.5)
+    model.ent.append(entropy)
     # model.div[env_idx].append(torch.div(tsigma.sqrt(),sigma.sqrt()).log() + torch.div(sigma+(tmu-mu).pow(2),tsigma*2) - 0.5)
     return action.item()
 
@@ -240,14 +245,14 @@ def finish_episode():
         # compute the reward for each state in the end of a rollout
         i = len(model_rewards) - 1
         for r in model_rewards[::-1]:
-            R = r + args.gamma * R + model.div[env_idx][i] - 0.001*model.entropies[env_idx][i]#- 1/args.beta*saved_actions[i][0] + args.alpha/args.beta*model.log_prob[env_idx][i]
+            R = r + args.gamma * R #- 0.001*model.entropies[env_idx][i] #+ model.div[env_idx][i] - 0.001*model.entropies[env_idx][i]#- 1/args.beta*saved_actions[i][0] + args.alpha/args.beta*model.log_prob[env_idx][i]
             rewards.insert(0, R)
             i -= 1
         rewards = torch.tensor(rewards)
-        #if rewards.std() != rewards.std() or len(rewards) == 0:
-        #    rewards = rewards - rewards.mean()
-        #else:
-        #    rewards = (rewards - rewards.mean()) / rewards.std()
+        if rewards.std() != rewards.std() or len(rewards) == 0:
+            rewards = rewards - rewards.mean()
+        else:
+            rewards = (rewards - rewards.mean()) / rewards.std()
         #gamma = 0
         #for i, reward in enumerate(rewards):
         #    rewards = rewards + gamma * model.div[env_idx][i]
@@ -266,8 +271,8 @@ def finish_episode():
             value_losses.append(F.smooth_l1_loss(value, torch.tensor([r])))
 
     loss = (torch.stack(policy_losses).sum() + \
-            0.5*torch.stack(value_losses).sum())#- \
-            #torch.stack(model.entropies).sum() * 0.0001) / num_envs
+            0.5*torch.stack(value_losses).sum() + 0.0002*torch.stack(model.kl).sum()- \
+            torch.stack(model.ent).sum() * 0.0001) / num_envs
 
 
     # compute gradients
@@ -277,7 +282,7 @@ def finish_episode():
     nn.utils.clip_grad_norm_(model.parameters(), 30)
 
     # Debugging
-    if True:
+    if False:
         print('grad')
         for i in range(1):
             #print(i)
@@ -298,6 +303,8 @@ def finish_episode():
     model.entropies = [[] for i in range(model.num_envs)]
     model.rewards = [[] for i in range(model.num_envs)]
     model.log_prob = [[] for i in range(model.num_envs)]
+    model.kl = []
+    model.ent = []
 
 def main():
     running_reward = 10
