@@ -267,6 +267,10 @@ def finish_episode():
             # feeds a weird difference between value and the reward
             value_losses.append(F.smooth_l1_loss(value, torch.tensor([r])))
 
+    model.kl = list(map(lambda x, y: x *y, map(lambda i: args.gamma**(i[0]+1), enumerate(list(model.kl))), list(model.kl)))
+
+    model.kl = list(map(lambda x: x[0][0] * x[1], zip(saved_actions, model.kl)))
+
     loss = (torch.stack(policy_losses).sum() + \
             0.5*torch.stack(value_losses).sum() + 0.002*torch.stack(model.kl).sum()- \
             torch.stack(model.ent).sum() * 0.0001) / num_envs
