@@ -33,7 +33,7 @@ parser.add_argument('--gamma', type=float, default=0.99, metavar='G',
                     help='discount factor (default: 0.99)')
 parser.add_argument('--alpha', type=float, default=0.9, metavar='A',
                     help='alpha (default: 0.9)')
-parser.add_argument('--beta', type=float, default=5., metavar='B',
+parser.add_argument('--beta', type=float, default=.5, metavar='B',
                     help='beta (default: 5.)')
 parser.add_argument('--seed', type=int, default=543, metavar='N',
                     help='random seed (default: 543)')
@@ -86,7 +86,8 @@ class Policy(nn.Module):
                                        range(self.num_envs+1)])
         self.sigma2_heads = nn.ModuleList([nn.Linear(128, 1) for i in
                                            range(self.num_envs+1)])
-        self.value_heads = nn.ModuleList([nn.Linear(128, 1) for i in range(self.num_envs)])
+        self.value_heads = nn.ModuleList([nn.Linear(128, 1) for i in
+                                          range(self.num_envs)])
 
         self.apply(weights_init)
         # +1 for the distilled policy
@@ -151,10 +152,11 @@ def select_action(state, env_idx):
 
     action = prob.sample()
 
-    new_KL = torch.div(sigma_t.sqrt(),args.alpha*sigma_t.sqrt()+\
+    new_KL = torch.div(sigma_t.sqrt(),args.alpha*sigma_t.sqrt() + \
                        args.beta*sigma.sqrt()).log() + \
-             (args.alpha*sigma_t.sqrt()+args.beta*sigma.sqrt()).pow(2) + \
-             torch.div(((1-args.alpha)*mu_t-(args.beta)*mu).pow(2),(2*sigma_t)) - 0.5
+             torch.div((args.alpha*sigma_t.sqrt() + \
+             args.beta*sigma.sqrt()).pow(2) + \
+             ((args.alpha-1)*mu_t+(args.beta)*mu).pow(2),(2*sigma_t)) - 0.5
 
     log_prob = prob.log_prob(action)
     model.saved_actions[env_idx].append(SavedAction(log_prob, value))
@@ -218,7 +220,7 @@ def finish_episode():
     nn.utils.clip_grad_norm_(model.parameters(), 30)
 
     # Debugging
-    if True:
+    if False:
         print('grad')
         for i in range(num_envs):
             print(i)

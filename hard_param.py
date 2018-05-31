@@ -34,7 +34,7 @@ import numpy as np
 from itertools import count
 from collections import namedtuple
 
-# used for recording run time data (1)
+# used for recording run time data (FOR_RECORD)
 import visualize
 
 import torch
@@ -322,10 +322,10 @@ def main():
 
 
         for env_idx, env in enumerate(envs):
-            if run_reward[env_idx] > 30 and trained_envs[env_idx] == False:
+            if run_reward[env_idx] > env.spec.reward_threshold and trained_envs[env_idx] == False:
                 print("{} solved!".format(envs_names[env_idx]))
                 trained_envs[env_idx] = True
-            if run_reward[env_idx] < 30 and trained_envs[env_idx] == True:
+            if run_reward[env_idx] < env.spec.reward_threshold and trained_envs[env_idx] == True:
                 print("{} not solved!".format(envs_names[env_idx]))
                 trained_envs[env_idx] = False
 
