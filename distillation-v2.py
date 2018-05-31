@@ -7,19 +7,7 @@
 # 'HalfInvertedPendulum-v0'
 #
 #
-#
-# Revision History
-# Ayya       05/27/18    Changed rollouts in main()
-# Ayya       05/26/18    Fixed errors and made it usable for many envs
-# Tim Liu    05/23/18    copied from a2c_cont.py and renamed
-# Tim Liu    05/23/18    added second environment env2
-# Tim Liu    05/23/18    added second sigma and mu head for Policy class
-# Tim Liu    05/23/18    modified forward to return second sigma and mu
-# Tim Liu    05/23/18    added second argument to select_action for choosing
-#                        which head to sample
-# Tim Liu    05/23/18    changed main loop to allow for multitasking
-# Tim Liu    05/26/18    changed print statement in select_action for if
-#                        sigma is NaN to reflect new sigma head attribute names
+
 
 
 
@@ -37,7 +25,8 @@ import torch.optim as optim
 from torch.distributions import Categorical
 from torch.autograd import Variable
 from torch.distributions.normal import Normal
-
+from hard_param import Policy as Teacher
+from hard_param import weights_init, normalized_columns_initializer
 
 parser = argparse.ArgumentParser(description='PyTorch actor-critic example')
 parser.add_argument('--gamma', type=float, default=0.99, metavar='G',
@@ -62,6 +51,7 @@ if args.envs:
 pi = Variable(torch.FloatTensor([math.pi]))
 
 if num_envs == 0:
+    envs_names = ['InvertedPendulum-v2', 'HalfInvertedPendulum-v0']
     # first environment
     env1 = gym.make('InvertedPendulum-v2')
     # second environment
@@ -76,33 +66,21 @@ for env in envs:
     env.seed(args.seed)
 
 
+
+def freeze_model(model):
+    for param in model.parameters():
+        param.requires_grad = False
+    return
+
+teacherNNs = [0 for i in range(num_envs)]
+for i, name in enumerate(envs_names):
+    teacher = torch.load(name + '.pt')
+    teacher_mod = Teacher(1)
+    teacher_mod.load_state_dict(teacher)
+    freeze_model(teacher_mod)
+    teacherNNs[i] = teacher_mod
+
 torch.manual_seed(args.seed)
-
-
-SavedAction = namedtuple('SavedAction', ['log_prob', 'value'])
-
-def normalized_columns_initializer(weights, std=1.0):
-    out = torch.randn(weights.size())
-    out *= std / torch.sqrt(out.pow(2).sum(1).expand_as(out))
-    return out
-
-
-def weights_init(m):
-    classname = m.__class__.__name__
-    if classname.find('Conv') != -1:
-        weight_shape = list(m.weight.data.size())
-        fan_in = np.prod(weight_shape[1:4])
-        fan_out = np.prod(weight_shape[2:4]) * weight_shape[0]
-        w_bound = np.sqrt(6. / (fan_in + fan_out))
-        m.weight.data.uniform_(-w_bound, w_bound)
-        m.bias.data.fill_(0)
-    elif classname.find('Linear') != -1:
-        weight_shape = list(m.weight.data.size())
-        fan_in = weight_shape[1]
-        fan_out = weight_shape[0]
-        w_bound = np.sqrt(6. / (fan_in + fan_out))
-        m.weight.data.uniform_(-w_bound, w_bound)
-        m.bias.data.fill_(0)
 
 
 class Policy(nn.Module):
@@ -114,23 +92,19 @@ class Policy(nn.Module):
         # not shared layers
         self.mu_heads = nn.ModuleList([nn.Linear(128, 1) for i in range(self.num_envs)])
         self.sigma2_heads = nn.ModuleList([nn.Linear(128, 1) for i in range(self.num_envs)])
-        self.value_heads = nn.ModuleList([nn.Linear(128, 1) for i in range(self.num_envs)])
 
         self.apply(weights_init)
         for i in range(self.num_envs):
             mu = self.mu_heads[i]
             sigma = self.sigma2_heads[i]
-            value = self.value_heads[i]
             mu.data = normalized_columns_initializer(mu.weight.data, 0.01)
             mu.bias.data.fill_(0)
             sigma.bias.data.fill_(0)
-            value.weight.data = normalized_columns_initializer(value.weight.data, 1.0)
-            value.bias.data.fill_(0)
+
 
         # initialize lists for holding run information
-        self.saved_actions = [[] for i in range(num_envs)]
-        self.entropies = [[] for i in range(num_envs)]
-        self.rewards = [[] for i in range(num_envs)]
+        self.div = [[] for i in range(num_envs)]
+
 
 
     def forward(self, x, env_idx):
@@ -139,21 +113,20 @@ class Policy(nn.Module):
         x = F.relu(self.affine1(x))
         mu = self.mu_heads[env_idx](x)
         sigma2 = self.sigma2_heads[env_idx](x)
-        value = self.value_heads[env_idx](x)
         sigma = F.softplus(sigma2)
-        return mu, sigma, value
-        # torch.exp(self.sigma2_head(x))
+        return mu, sigma
+
 
 # for debugging
 test = False
 
 model = Policy()
 # learning rate - might be useful to change
-optimizer = optim.Adam(model.parameters(), lr=3e-3)
+optimizer = optim.Adam(model.parameters(), lr=1e-3)
 eps = np.finfo(np.float32).eps.item()
 
 
-def select_action(state, env_idx):
+def select_action(state, env_idx, roll):
     '''given a state, this function chooses the action to take
     arguments: state - observation matrix specifying the current model state
                env - integer specifying which environment to sample action
@@ -161,39 +134,20 @@ def select_action(state, env_idx):
     return - action to take'''
 
     state = torch.from_numpy(state).float()
-    # retrain the model - returns
-    # pass the number of environment
-    mu, sigma, state_value = model(state, env_idx)
-    # mu1 sigma 1 correspond to environment 1
-    # mu2 sigma 2 correspond to environment 2
+    tmodel = teacherNNs[env_idx]
+    mu, sigma = model(state, env_idx)
+    tmu, tsigma, tvalue = tmodel(state, 0) # only the one environment
 
+    # use student
+    if roll == 1:
+        prob = Normal(mu, sigma.sqrt())
 
-    # debugging
-    if False:
-        print(mu)
-        print(state_value)
-        print(model.affine1.weight)
-    # if sigma is nan
-    if sigma != sigma:
-        print(mu)
-        print(state_value)
-        # print out the weights
-        print('sigma is nan')
-        exit()
+    else: # use teacher
+        prob = Normal(tmu, tsigma.sqrt())
 
-    # creates a multivariate distribution
-    # samples an action according to the policy distribution
-    prob = Normal(mu, sigma.sqrt())
-    entropy = 0.5*((sigma*2*pi).log()+1)
     action = prob.sample()
-    log_prob = prob.log_prob(action)
-    model.entropies[env_idx].append(entropy)
-    #print(env_idx)
-    #print(model.saved_actions)
-    saved_actions = model.saved_actions[env_idx]
-    saved_actions.append(SavedAction(log_prob, state_value))
-    # returns the action as a number converted to python type and bounded within -1, 1
 
+    model.div[env_idx].append(torch.div(tsigma.sqrt(),sigma.sqrt()).log() + torch.div(sigma+(tmu-mu).pow(2),tsigma*2) - 0.5)
     return action.item()
 
 
@@ -201,44 +155,19 @@ def finish_episode():
     policy_losses = []
     value_losses = []
     entropy_sum = 0
-    lengths = np.array([len(model.rewards[i]) for i in range(num_envs)])
-    length_discount = lengths/np.sum(lengths)
-    for env_idx in range(num_envs):
-        saved_actions = model.saved_actions[env_idx]
-        model_rewards = model.rewards[env_idx]
-        R = torch.zeros(1, 1)
-        R = Variable(R)
-        rewards = []
-        # compute the reward for each state in the end of a rollout
-        for r in model_rewards[::-1]:
-            R = r + args.gamma * R
-            rewards.insert(0, R)
-        rewards = torch.tensor(rewards)
-        if rewards.std() != rewards.std() or len(rewards) == 0:
-            rewards = rewards - rewards.mean()
-        else:
-            rewards = (rewards - rewards.mean()) / rewards.std()
+    loss = torch.zeros(1, 1)
+    loss = Variable(loss)
 
-        for (log_prob, value), r in zip(saved_actions, rewards):
-            # reward is the delta param
-            value += Variable(torch.randn(value.size()))
-            reward = r - value.item()
-            # theta
-            # need gradient descent - so negative
-            policy_losses.append(-log_prob * reward / length_discount[env_idx])
-            # https://pytorch.org/docs/master/nn.html#torch.nn.SmoothL1Loss
-            # feeds a weird difference between value and the reward
-            value_losses.append(F.smooth_l1_loss(value, torch.tensor([r])) / length_discount[env_idx])
-            entropy_sum += torch.stack(model.entropies[env_idx]).sum() / length_discount[env_idx]
-    optimizer.zero_grad()
-    # sum of 2 losses?
-    loss = (torch.stack(policy_losses).sum() + 0.5*torch.stack(value_losses).sum() \
-            - entropy_sum * 0.0001)
+    for env_idx in range(num_envs):
+        loss = loss + torch.stack(model.div[env_idx]).sum()
 
     # Debugging
     if False:
+        print(divergence[0].data)
         print(loss, 'loss')
+        print()
     # compute gradients
+    optimizer.zero_grad()
     loss.backward()
 
     nn.utils.clip_grad_norm_(model.parameters(), 30)
@@ -248,7 +177,7 @@ def finish_episode():
         print('grad')
         for i in range(num_envs):
             print(i)
-            print(model.mu_head[i].weight.grad)
+            print(model.mu_heads[i].weight)
             print('##')
             #print(model.sigma2_head[i].weight.grad)
             print('##')
@@ -256,13 +185,9 @@ def finish_episode():
             print('##')
             #print(model.affine1.weight.grad)
 
-
     # train the NN
     optimizer.step()
-    model.saved_actions = [[] for i in range(num_envs)]
-    model.entropies = [[] for i in range(num_envs)]
-    model.rewards = [[] for i in range(num_envs)]
-
+    model.div = [[] for i in range(num_envs)]
 
 
 def main():
@@ -271,16 +196,21 @@ def main():
     roll_length = np.array([0 for i in range(num_envs)])
     trained = False
     trained_envs = np.array([False for i in range(num_envs)])
-    for i_episode in count(1):
+    for i_episode in range(6000):
+        p = np.random.random()
+        if p < 0.5:
+            roll = 0
+        else:
+            roll = 1
+        # roll = np.random.randint(2)
         length = 0
         for env_idx, env in enumerate(envs):
             state = env.reset()
             done = False
             for t in range(10000):  # Don't infinite loop while learning
-                action = select_action(state, env_idx)
+                action = select_action(state, env_idx, roll)
                 state, reward, done, _ = env.step(action)
                 reward = max(min(reward, 1), -1)
-                model.rewards[env_idx].append(reward)
 
                 if args.render:
                     env.render()
@@ -310,6 +240,8 @@ def main():
               "the last episode runs to {} time steps!".format(running_reward, t))
             break
 
+    if i_episode == 5999:
+        print('Well that failed')
 
 if __name__ == '__main__':
     main()
