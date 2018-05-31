@@ -213,7 +213,7 @@ def select_action(state, env_idx):
     model.saved_actions[env_idx].append(SavedAction(log_prob, value))
     model.entropies[env_idx].append(entropy)
 
- 
+
     model.div[env_idx].append(torch.div(sigma_t.sqrt(), args.alpha*sigma_t.sqrt()+ args.beta*sigma.sqrt()).log() + \
              (args.alpha*sigma_t.sqrt()+args.beta*sigma.sqrt()).pow(2) + \
              torch.div(((1-args.alpha)*mu_t-(args.beta)*mu).pow(2),(2*sigma_t)) - 0.5)
@@ -266,6 +266,10 @@ def finish_episode():
             # https://pytorch.org/docs/master/nn.html#torch.nn.SmoothL1Loss
             # feeds a weird difference between value and the reward
             value_losses.append(F.smooth_l1_loss(value, torch.tensor([r])))
+
+    model.kl = list(map(lambda x, y: x *y, map(lambda i: args.gamma**(i[0]+1), enumerate(list(model.kl))), list(model.kl)))
+
+    model.kl = list(map(lambda x: x[0][0] * x[1], zip(saved_actions, model.kl)))
 
     loss = (torch.stack(policy_losses).sum() + \
             0.5*torch.stack(value_losses).sum() + 0.002*torch.stack(model.kl).sum()- \
