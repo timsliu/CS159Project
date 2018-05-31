@@ -51,7 +51,7 @@ env_list = [env2dir[key] for key in env2dir]
 
 # global list of multitasking techniques - used for error checking
 tech_list = ["hard_param", "soft_param", "fine_tuning", \
-                         "distillation", "baseline"]
+             "distral", "distillation", "baseline"]
 
 # global reward threshold - used to determine convergence times
 REWARD_THRESHOLD = 950

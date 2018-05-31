@@ -6,9 +6,10 @@
 # USAGE: --env ['env1', ..] If nothing passed, assumes 'InvertedPendulum-v2' and
 # 'HalfInvertedPendulum-v0'
 #
+# Revision History:
+# Tim Liu    05/31/18    updated for record keeping
+# Tim Liu    05/31/18    removed manual seeding
 #
-
-
 
 
 import argparse
@@ -17,6 +18,9 @@ import gym
 import numpy as np
 from itertools import count
 from collections import namedtuple
+
+# used for recording run time data (FOR_RECORD)
+import visualize
 
 import torch
 import torch.nn as nn
@@ -45,6 +49,11 @@ parser.add_argument('--envs', action='append', nargs='+', type=str)
 
 args = parser.parse_args()
 
+# global lists for recording run time behavior - initialized by init_list
+# (FOR_RECORD)
+length_records = []    # length of each run for each episode
+rr_records = []        # running rewards for each episode
+
 
 num_envs = 0
 # number of environments
@@ -65,11 +74,7 @@ if num_envs == 0:
 else:
     envs = [gym.make(envs_names[i]) for i in range(num_envs)]
 
-for env in envs:
-    env.seed(args.seed)
 
-
-torch.manual_seed(args.seed)
 
 
 class Policy(nn.Module):
@@ -255,6 +260,11 @@ def finish_episode():
     model.ent = []
 
 def main():
+    
+    # initialize the record lists to the proper length (FOR_RECORD)
+    length_records = visualize.init_list(envs_names)
+    rr_records = visualize.init_list(envs_names)
+    
     running_reward = 10
     run_reward = np.array([10 for i in range(num_envs)])
     roll_length = np.array([0 for i in range(num_envs)])
@@ -283,6 +293,11 @@ def main():
         # update our running reward
         running_reward = running_reward * 0.99 + length / num_envs * 0.01
         run_reward = run_reward * 0.99 + roll_length * 0.01
+        
+        # call function to record run data (FOR_RECORD)
+        length_records, rr_records = visualize.update_records(\
+            roll_length, run_reward, length_records, rr_records)
+        
         finish_episode()
         if i_episode % args.log_interval == 0:
             print('Episode {}\tAverage length per environment {}'.format(i_episode, run_reward))
@@ -302,6 +317,9 @@ def main():
 
     if i_episode == 5999:
         print('Well that failed')
+        
+    visualize.pickle_list('distral', envs_names, length_records,\
+                              rr_records)
 
 if __name__ == '__main__':
     main()

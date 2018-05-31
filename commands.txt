@@ -51,3 +51,13 @@ pythonw hard_param.py --env LowFrictionInvertedPendulum-v0
 
 pythonw hard_param.py --env LongInvertedPendulum-v0  
 
+Distral:
+------------
+
+pythonw distral-v2.py --env HighGravityInvertedPendulum-v0  LowGravityInvertedPendulum-v0 InvertedPendulum-v2 LongInvertedPendulum-v0 LowFrictionInvertedPendulum-v0 HighFrictionInvertedPendulum-v0
+
+Distillation:
+------------
+
+pythonw distillation-v2.py --env HighGravityInvertedPendulum-v0  LowGravityInvertedPendulum-v0 InvertedPendulum-v2 LongInvertedPendulum-v0 LowFrictionInvertedPendulum-v0 HighFrictionInvertedPendulum-v0
+
