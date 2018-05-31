@@ -21,6 +21,7 @@
 # Tim Liu    05/30/18    wrote init_list, update_records, and pickle_list
 # Tim Liu    05/30/18    wrote plotting functions
 # Tim Liu    05/30/18    updated so all plots go to a single folder
+# Tim Liu    05/30/18    fixed bug that miscalculated run lengths
 
 
 import pickle
@@ -35,8 +36,7 @@ HOME = os.getcwd()
 # dictionary mapping each environment name to a directory    
 env2dir = {'InvertedPendulum-v2': 'full_pend', 
            'HalfInvertedPendulum-v0': 'half_pend',
-           'LongInvertedPendulum-v0': 'long_pend',
-           'LongCartInvertedPendulum-v0': 'long_cart'}
+           'LongInvertedPendulum-v0': 'long_pend'}
 
 # Update this with other environments!!
 
@@ -47,6 +47,10 @@ env_list = [env2dir[key] for key in env2dir]
 # global list of multitasking techniques - used for error checking
 tech_list = ["hard_param", "soft_param", "fine_tuning", \
                          "distillation", "baseline"]
+
+# global reward threshold
+REWARD_THRESHOLD = 30
+
 
 def init_list(env_names):
     '''initializes the global length_records and rr_records lists to
@@ -85,8 +89,15 @@ def update_records(roll_length, run_reward, length_records, rr_records):
 def update_fine(roll_length, run_reward, length_records, rr_records, env):
     '''custom function for updating the fine_tuning records - necessary
        because fine_tuning does not simultaneously train multiple
-       environments'''
+       environments
+       arguments: env - index of the environment being trained'''
     
+    # only update the currently training environment
+    length_records[env].append(roll_length)
+    # add most recent running reward for ith environment
+    rr_records[env].append(run_reward)
+    
+    return length_records, rr_records
     
 
 def pickle_list(technique, env_names, length_records, rr_records):
@@ -224,12 +235,13 @@ def graph_gen(technique, env, data_type):
     mean_list = compute_mean_list(data_list)
         
     # change directory to where all the plots belong    
-    os.chdir(os.path.join(HOME, '/trial_records/plots'))
+    plot_path = os.path.join(HOME, 'trial_records')
+    os.chdir(os.path.join(plot_path, 'all_plots'))
     
     for trial in data_list:
         plt.plot(trial, linewidth = 1, color = 'lightskyblue')
         
-    title_string = technique + " " + env + " " + data_type
+    title_string = technique + "_" + env + "_" + data_type + '.png'
     # plot the average line
     plt.plot(mean_list, linewidth = 2, color = 'blue')
     # title and label the plot
@@ -239,8 +251,9 @@ def graph_gen(technique, env, data_type):
     plt.grid(True)
     
     # save the figure
-    plt.savefig(title_string + '.png')
+    plt.savefig(title_string)
     print("New file %s saved to all_plots" %title_string)
+    plt.close()
         
     os.chdir(HOME)
     
@@ -249,7 +262,7 @@ def graph_gen(technique, env, data_type):
 def trial_summary():
     '''generates summary data for all technique-environment pairs'''
     # switch to directory to dump all the data
-    os.chdir(os.path.join(HOME, 'summary'))
+    os.chdir(os.path.join(os.path.join(HOME, 'trial_records'), 'summary'))
     print("Overwriting previous summary file...")
     summary = open("summary.txt", 'w')
     # number of combinations for which summary data was generated
@@ -270,6 +283,11 @@ def trial_summary():
             # get average run data
             mean_lengths = compute_mean_list(roll_lengths)
             mean_rewards = compute_mean_list(running_rewards)
+            
+            # go back to the correct directory
+            os.chdir(os.path.join(os.path.join(HOME, 'trial_records'),\
+                                  'summary'))
+            
                         
             # save the mean length         
             file_name = tech + '_' + env + '_mean_length.p'
@@ -284,18 +302,36 @@ def trial_summary():
             f.close() 
             
             # list of convergence times for each trial
-            conv_times = [len(x) for x in running_rewards]
-            out_string = "Technique:   %s   Environment:   %s \n \
-                          Average Convergence Time:            %.1f\n \
-                          Convergence Time Standard Deviation: %.1f\n \
-                          Number of trials:                   %d\n\n" \
+            conv_times = get_convergence_times(running_rewards)
+            out_string = "Technique:   %s   Environment:   %s \n\
+            Average Convergence Time:            %.1f\n\
+            Convergence Time Standard Deviation: %.1f\n\
+            Number of trials:                    %d\n\n"\
                           %(tech, env, np.mean(conv_times), \
                             np.std(conv_times), len(conv_times))
             
-            summary.write(out)
+            summary.write(out_string)
     summary.close()
     print("Summaries for %d technique environment combos generated" %num_sum)
     return
+
+def get_convergence_times(running_rewards):
+    '''returns a list of when the trials surpassed the reward threshold
+    arguments: running_rewards - list of the running rewards of different
+                                 trials
+    return: convergence_times - list of episodes to converge'''
+    
+    # list of number of episodes for each trial to converge
+    convergence_times = []
+    
+    # iterater through each trial
+    for trial in running_rewards:
+        i = 0 # number of passed episodes
+        while trial[i] < REWARD_THRESHOLD:
+            i += 1
+        convergence_times.append(i)
+      
+    return convergence_times
 
 def compute_mean_list(data_list):
     '''helper function takes an array of subarrays holding roll length
@@ -330,11 +366,11 @@ def compute_mean_list(data_list):
         
     return average_list
 
-def get_combined_list(technique, environment, data_type):
+def get_combined_list(technique, env, data_type):
     '''helper function that puts the data from multiple trials
     together into a single list
     arguments: technique - multitask learning technique
-               environment - training environment
+               env - training environment
                data_type - (string) "length" or "run_reward"
     return value: data_list - single list with each element a list
                               representing one trial'''    
@@ -349,6 +385,7 @@ def get_combined_list(technique, environment, data_type):
     
     # generate list of files with the data we're interested in
     file_list = [x for x in os.listdir() if data_type in x]
+    print(file_list)
     
     # list of all the data
     data_list = []

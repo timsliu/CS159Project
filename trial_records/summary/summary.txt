@@ -1,0 +1,20 @@
+Technique:   hard_param   Environment:   full_pend 
+            Average Convergence Time:            315.0
+            Convergence Time Standard Deviation: 0.0
+            Number of trials:                    1
+
+Technique:   hard_param   Environment:   half_pend 
+            Average Convergence Time:            303.0
+            Convergence Time Standard Deviation: 0.0
+            Number of trials:                    1
+
+Technique:   fine_tuning   Environment:   full_pend 
+            Average Convergence Time:            298.7
+            Convergence Time Standard Deviation: 15.3
+            Number of trials:                    3
+
+Technique:   fine_tuning   Environment:   half_pend 
+            Average Convergence Time:            71.0
+            Convergence Time Standard Deviation: 15.1
+            Number of trials:                    3
+

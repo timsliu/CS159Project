@@ -84,6 +84,7 @@ env2 = gym.make('HalfInvertedPendulum-v0')
 
 # hardcoded - finetuning only tries these two environments
 envs_names = ['InvertedPendulum-v2', 'HalfInvertedPendulum-v0']
+# DO NOT MODIFY THESE
 
 
 SavedAction = namedtuple('SavedAction', ['log_prob', 'value'])
@@ -290,12 +291,14 @@ def main():
         
         if env1_trained:
             # call function to record run data (FOR_RECORD)
-            length_records, rr_records = visualize.update_records(\
-                roll_length, run_reward, length_records, rr_records)             
+            length_records, rr_records = visualize.update_fine(\
+                t, running_reward, length_records, rr_records, 1)
+            # environment 1 trained so fill data for env2 (last arg)
         else:
             # call function to record run data (FOR_RECORD)
-            length_records, rr_records = visualize.update_records(\
-                roll_length, run_reward, length_records, rr_records)             
+            length_records, rr_records = visualize.update_fine(\
+                t, running_reward, length_records, rr_records, 0)   
+            # update record for environment 1 (last arg)
         
        
         # call function to update our neural net
@@ -320,6 +323,9 @@ def main():
     # finished with everything - print out summary
     print("Time to train environment 1: ", env1_training_time)
     print("Time to train environment 2: ", env2_training_time)
+    
+    # save the list 
+    visualize.pickle_list('fine_tuning', envs_names, length_records, rr_records)
 
 
 if __name__ == '__main__':
