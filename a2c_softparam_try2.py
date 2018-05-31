@@ -2,6 +2,9 @@
 #
 # Tim Liu    05/26/18    Reduced learning rate to 1e-3
 # Tim Liu    05/26/18    Added second environment to comment out and run on
+# Tim Liu    05/31/18    Changed main loop to record separate running rewards
+#                        for each environment
+# Tim Liu    05/31/18    Updated to perform record keeping
 
 
 import argparse
@@ -32,7 +35,10 @@ parser.add_argument('--render', action='store_true',
                     help='render the environment')
 parser.add_argument('--log-interval', type=int, default=10, metavar='N',
                     help='interval between training status logs (default: 10)')
+parser.add_argument('--envs', action='append', nargs='+', type=str)
+
 parser.add_argument('--entropy-coef', type=float, default=0.01)
+
 args = parser.parse_args()
 pi = Variable(torch.FloatTensor([math.pi]))
 
@@ -47,7 +53,7 @@ rr_records = []        # running rewards for each episode
 envs_names = args.envs[0]
 if len(envs_names) != 1:
     print("Can only train one additional environment!")
-exit()
+    exit()
 
 #first environment
 env1 = gym.make('InvertedPendulum-v2')
@@ -245,40 +251,73 @@ def finish_episode(state, model, optimizer):
 
 
 def main():
-    running_reward = 10
+   
+    # initialize the record lists to the proper length (FOR_RECORD)
+    length_records = visualize.init_list(envs_names)
+    rr_records = visualize.init_list(envs_names)    
     
     # running reward for the two environments
     run_reward = np.array([10 for i in range(num_envs)])
     # length of episode for the two environments
-    roll_length = np.array([0 for i in range(num_envs)])    
+    roll_length = np.array([0 for i in range(num_envs)]) 
+    # stop when all environments have been trained
+    trained_envs = np.array([False for i in range(num_envs)])
+    running_reward = 10
+    
 
     for i_episode in count(1):
         # random initialization
         state1 = env1.reset()
         state2 = env2.reset()
+        
+        # array to track when to stop training each environment
+        env_done = [False for i in range(num_envs)]
 
         for t in range(10000):  # Don't infinite loop while learning
-            # env1 network
-            action1 = select_action(state1, model1)
-            state1, reward1, done, _ = env1.step(action1)
-            reward1 = max(min(reward1, 1), -1)
-            if args.render:
-                env1.render()
-            model1.rewards.append(reward1)
-            if done:
-                break
+            
+            if (env_done[0] == False):   # training not finished
+                # env1 network
+                action1 = select_action(state1, model1)
+                state1, reward1, done, _ = env1.step(action1)
+                reward1 = max(min(reward1, 1), -1)
+    
+                model1.rewards.append(reward1)
+                if done:
+                    # record number of trials to train
+                    roll_length[0] = t
+                    # specify this environment is done
+                    env_done[0] = True
 
-            # env2 network
-            action2 = select_action(state2, model2)
-            state2, reward2, done, _ = env2.step(action2)
-            reward2 = max(min(reward2, 1), -1)
-            if args.render:
-                env2.render()
-            model2.rewards.append(reward2)
-            if done:
+            if (env_done[1] == False):  # training not finished
+                # env2 network
+                action2 = select_action(state2, model2)
+                state2, reward2, done, _ = env2.step(action2)
+                reward2 = max(min(reward2, 1), -1)
+    
+                model2.rewards.append(reward2)
+                if done:
+                    # record trials needed to train
+                    roll_length[1] = t
+                    # specify this environment is done
+                    env_done[1] = True
+                 
+            # check if all environments are done training   
+            if False not in env_done:
+                # if so break out of this episode loop
                 break
-
-        running_reward = running_reward * 0.99 + t * 0.01
+            
+        # running reward is combination across all environments    
+        running_reward = running_reward * 0.99 + sum(roll_length) / num_envs * 0.01
+        
+        # run reward is array of the running reward for a single environment
+        run_reward = run_reward * 0.99 + roll_length * 0.01
+        
+        # call function to record run data (FOR_RECORD)
+        length_records, rr_records = visualize.update_records(\
+            roll_length, run_reward, length_records, rr_records)
+        
+        # this print may no longer be accurate due to the way it averages
+        # across multiple environments
         finish_episode(state1, model1, optimizer1)
         finish_episode(state2, model2, optimizer2)
         if i_episode % args.log_interval == 0:
@@ -287,10 +326,14 @@ def main():
 
         #print("env1 reward threshold {}".format(env1.spec.reward_threshold))
         #print("env2 reward threshold {}".format(env2.spec.reward_threshold))
-        if running_reward > env1.spec.reward_threshold and running_reward > env2.spec.reward_threshold:
+        if run_reward[0] > env1.spec.reward_threshold and run_reward[1] > env2.spec.reward_threshold:
             print("Solved! Running reward is now {} and "
                   "the last episode runs to {} time steps!".format(running_reward, t))
             break
+        
+    # call helper function to save the run time data (FOR_RECORD)
+    visualize.pickle_list('soft_param', envs_names, length_records,\
+                              rr_records)
 
 
 if __name__ == '__main__':

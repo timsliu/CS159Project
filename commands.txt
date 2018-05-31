@@ -1,6 +1,28 @@
 
 Hard Parameter sharing:
+-----------------------
 This does multitask learning on all seven environments simultaneously
 (may need to change pythonw to python)
 
-pythonw hard_param.py --env HighGravityInvertedPendulum-v0  LowGravityInvertedPendulum-v0 InvertedPendulum-v2 HalfInvertedPendulum-v0 LongInvertedPendulum-v0 LowFrictionInvertedPendulum-v0 HighFrictionInvertedPendulum-v0
+pythonw hard_param.py --env HighGravityInvertedPendulum-v0  LowGravityInvertedPendulum-v0 InvertedPendulum-v2 LongInvertedPendulum-v0 LowFrictionInvertedPendulum-v0 HighFrictionInvertedPendulum-v0
+
+
+Soft Parameter sharing:
+-----------------------
+Soft parameter sharing is done on pairs of two environments. The second environment is passed as an argument, and the first is fixed to always be inverted_pendulum. Tests need to be run on each of the seven environments
+
+
+pythonw a2c_softparam_try2.py --envs HighGravityInvertedPendulum-v0
+
+The high gravity environment should be replaced by each of the other 
+environments (do not pass InvertedPendulum-v2)
+
+Fine Tuning sharing:
+-----------------------
+Fine tuning is done on pairs of two environments. The second environment is passed as an argument, and the first is fixed to always be inverted_pendulum. Tests need to be run on each of the environments
+
+pythonw fine_tuning.py --envs HighGravityInvertedPendulum-v0
+
+The high gravity environment should be replaced by each of the other 
+environments (do not pass InvertedPendulum-v2)
+

@@ -33,9 +33,10 @@ import numpy as np
 # current directory to return to each time
 HOME = os.getcwd()
 
-# dictionary mapping each environment name to a directory    
+# dictionary mapping each environment name to a directory  
+# The values MUST match the directory names
 env2dir = {'InvertedPendulum-v2': 'full_pend', 
-           'HalfInvertedPendulum-v0': 'half_pend',
+           'HalfInvertedPendulum-v0': 'short_pend',
            'LongInvertedPendulum-v0': 'long_pend',
            'HighGravityInvertedPendulum-v0': 'high_grav',
            'LowGravityInvertedPendulum-v0': 'low_grav',

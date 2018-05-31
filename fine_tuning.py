@@ -86,7 +86,7 @@ pi = Variable(torch.FloatTensor([math.pi]))
 envs_names = args.envs[0]
 if len(envs_names) != 1:
     print("Can only train one additional environment!")
-exit()
+    exit()
 
 #first environment
 env1 = gym.make('InvertedPendulum-v2')
@@ -320,7 +320,7 @@ def main():
                 i_episode, t, running_reward))
             
         # reach here when the first environment is finished training
-        if running_reward > env.spec.reward_threshold:
+        if running_reward > 30:
             print("Solved! Running reward is now {} and "
                   "the last episode runs to {} time steps!".format(running_reward, t))
             if env1_trained:
