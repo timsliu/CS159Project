@@ -31,10 +31,10 @@ from hard_param import weights_init, normalized_columns_initializer
 parser = argparse.ArgumentParser(description='PyTorch actor-critic example')
 parser.add_argument('--gamma', type=float, default=0.99, metavar='G',
                     help='discount factor (default: 0.99)')
-parser.add_argument('--alpha', type=float, default=0.7, metavar='A',
-                    help='alpha (default: 0.9)')
-parser.add_argument('--beta', type=float, default=0.3, metavar='B',
-                    help='beta (default: 5.)')
+parser.add_argument('--alpha', type=float, default=0.9, metavar='A',
+                    help='alpha (default: 0.8)')
+parser.add_argument('--beta', type=float, default=0.1, metavar='B',
+                    help='beta (default: 0.2)')
 parser.add_argument('--seed', type=int, default=543, metavar='N',
                     help='random seed (default: 543)')
 parser.add_argument('--render', action='store_true',
@@ -55,11 +55,11 @@ if args.envs:
 pi = Variable(torch.FloatTensor([math.pi]))
 
 if num_envs == 0:
-    envs_names = ['InvertedPendulum-v2', 'HalfInvertedPendulum-v0']
+    envs_names = ['InvertedPendulum-v2', 'LongInvertedPendulum-v0']
     # first environment
     env1 = gym.make('InvertedPendulum-v2')
     # second environment
-    env2 = gym.make('HalfInvertedPendulum-v0')
+    env2 = gym.make('LongInvertedPendulum-v0')
     num_envs = 2
     envs = [env1, env2]
 else:
@@ -71,55 +71,6 @@ for env in envs:
 
 torch.manual_seed(args.seed)
 
-class Policy(nn.Module):
-    def __init__(self):
-        super(Policy, self).__init__()
-        self.num_envs = num_envs
-        # shared layer
-        self.affine1 = nn.Linear(4, 128)
-        self.affine_pi0 = nn.Linear(4, 128)
-        # not shared layers
-        self.mu_heads = nn.ModuleList([nn.Linear(128, 1) for i in
-                                       range(self.num_envs+1)])
-        self.sigma2_heads = nn.ModuleList([nn.Linear(128, 1) for i in
-                                           range(self.num_envs+1)])
-        self.value_heads = nn.ModuleList([nn.Linear(128, 1) for i in range(self.num_envs)])
-
-        self.apply(weights_init)
-        # +1 for the distilled policy
-        for i in range(self.num_envs+1):
-            mu = self.mu_heads[i]
-            sigma = self.sigma2_heads[i]
-            mu.data = normalized_columns_initializer(mu.weight.data, 0.01)
-            mu.bias.data.fill_(0)
-            sigma.bias.data.fill_(0)
-            if i != self.num_envs:
-                value = self.value_heads[i]
-                value.weight.data = normalized_columns_initializer(value.weight.data, 1.0)
-                value.bias.data.fill_(0)
-
-
-        # initialize lists for holding run information
-        self.div = [[] for i in range(self.num_envs)]
-        self.saved_actions = [[] for i in range(self.num_envs)]
-        self.entropies = [[] for i in range(self.num_envs)]
-        self.rewards = [[] for i in range(self.num_envs)]
-        self.log_prob = [[] for i in range(self.num_envs)]
-
-    def forward(self, y, env_idx):
-        '''updated to have 5 return values (2 for each action head one for
-        value'''
-        x = F.relu(self.affine1(y))
-        mu = self.mu_heads[env_idx](x)
-        sigma2 = self.sigma2_heads[env_idx](x)
-        sigma = F.softplus(sigma2)
-        value = self.value_heads[env_idx](x)
-
-        z = F.relu(self.affine_pi0(y))
-        mu_dist = self.mu_heads[num_envs](z)
-        sigma2_dist = self.sigma2_heads[num_envs](z)
-        sigma_dist = F.softplus(sigma2_dist)
-        return mu, sigma, value, mu_dist, sigma_dist
 
 class Policy(nn.Module):
     def __init__(self):
