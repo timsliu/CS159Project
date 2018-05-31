@@ -1,7 +1,19 @@
-# Revision History
+# actor critic multitasking continous
 #
-# Tim Liu    05/26/18    Reduced learning rate to 1e-3
-# Tim Liu    05/26/18    Added second environment to comment out and run on
+# This program implements actor critic multitask learning for a continuous
+# environment using vanilla multitasking (hard parameter sharing).
+#
+# Revision History
+# Tim Liu    05/23/18    copied from a2c_cont.py and renamed
+# Tim Liu    05/23/18    added second environment env2
+# Tim Liu    05/23/18    added second sigma and mu head for Policy class
+# Tim Liu    05/23/18    modified forward to return second sigma and mu
+# Tim Liu    05/23/18    added second argument to select_action for choosing
+#                        which head to sample
+# Tim Liu    05/23/18    changed main loop to allow for multitasking
+# Tim Liu    05/26/18    changed print statement in select_action for if
+#                        sigma is NaN to reflect new sigma head attribute names
+
 
 
 import argparse
@@ -33,24 +45,28 @@ parser.add_argument('--entropy-coef', type=float, default=0.01)
 args = parser.parse_args()
 pi = Variable(torch.FloatTensor([math.pi]))
 
-#uncomment one of these to switch between environments
+# first environment
 env1 = gym.make('InvertedPendulum-v2')
-env2 = gym.make('HalfInvertedPendulum-v0')
-'''Max_action = env.action_space.high
-Min_action = env.action_space.low'''
 env1.seed(args.seed)
+# second environment
+env2 = gym.make('HalfInvertedPendulum-v0')
 env2.seed(args.seed)
-#torch.manual_seed(args.seed)
+
+# take max_action from the first environment
+Max_action = env1.action_space.high
+Min_action = env1.action_space.low
+torch.manual_seed(args.seed)
 
 
 SavedAction = namedtuple('SavedAction', ['log_prob', 'value'])
 
+# what is this doing?
 def normalized_columns_initializer(weights, std=1.0):
     out = torch.randn(weights.size())
     out *= std / torch.sqrt(out.pow(2).sum(1).expand_as(out))
     return out
 
-
+# what is this doing?
 def weights_init(m):
     classname = m.__class__.__name__
     if classname.find('Conv') != -1:
@@ -68,7 +84,7 @@ def weights_init(m):
         m.weight.data.uniform_(-w_bound, w_bound)
         m.bias.data.fill_(0)
 
-
+# what is this doing?
 def normal(x, mu, sigma_sq):
     a = (-1*(Variable(x)-mu).pow(2)/(2*sigma_sq)).exp()
     b = 1/(2*sigma_sq*pi.expand_as(sigma_sq)).sqrt()
@@ -77,55 +93,98 @@ def normal(x, mu, sigma_sq):
 class Policy(nn.Module):
     def __init__(self):
         super(Policy, self).__init__()
+        # shared layer
         self.affine1 = nn.Linear(4, 128)
         # 2 outputs because 2D space
-        self.mu_head = nn.Linear(128, 1)
-        self.sigma2_head = nn.Linear(128, 1)
+        # mu and sigma head for environment 1
+        self.mu_head_env1 = nn.Linear(128, 1)
+        self.sigma2_head_env1 = nn.Linear(128, 1)
+        # mu and sigma head for environment 2
+        self.mu_head_env2 = nn.Linear(128, 1)
+        self.sigma2_head_env2 = nn.Linear(128, 1)
+        # define the value head (what is this????)
         self.value_head = nn.Linear(128, 1)
+        
+        # initialize environment 1 head
         self.apply(weights_init)
-        self.mu_head.weight.data = normalized_columns_initializer(self.mu_head.weight.data, 0.01)
-        self.sigma2_head.weight.data = normalized_columns_initializer(self.sigma2_head.weight.data, 0.01)
-        self.mu_head.bias.data.fill_(0)
-        self.sigma2_head.bias.data.fill_(0)
+        self.mu_head_env1.weight.data = normalized_columns_initializer\
+            (self.mu_head_env1.weight.data, 0.01)
+        self.sigma2_head_env1.weight.data = normalized_columns_initializer\
+            (self.sigma2_head_env1.weight.data, 0.01)
+        self.mu_head_env1.bias.data.fill_(0)
+        self.sigma2_head_env1.bias.data.fill_(0)
+        
+        # initialize environment 2 head
+        self.apply(weights_init)
+        self.mu_head_env2.weight.data = normalized_columns_initializer\
+            (self.mu_head_env2.weight.data, 0.01)
+        self.sigma2_head_env2.weight.data = normalized_columns_initializer\
+            (self.sigma2_head_env2.weight.data, 0.01)
+        self.mu_head_env2.bias.data.fill_(0)
+        self.sigma2_head_env2.bias.data.fill_(0)
+        
+        #initialization for the value head
         self.value_head.weight.data = normalized_columns_initializer(self.value_head.weight.data, 1.0)
         self.value_head.bias.data.fill_(0)
+        
+        # initialize lists for holding run information
         self.saved_actions = []
         self.entropies = []
         self.rewards = []
 
     def forward(self, x):
+        '''updated to have 5 return values (2 for each action head one for
+        value'''
         x = F.relu(self.affine1(x))
-        return self.mu_head(x), F.softplus(self.sigma2_head(x)), self.value_head(x)
+        return self.mu_head_env1(x), F.softplus(self.sigma2_head_env1(x)),\
+               self.mu_head_env2(x), F.softplus(self.sigma2_head_env2(x)),\
+               self.value_head(x)
         # torch.exp(self.sigma2_head(x))
 
 # for debugging
 test = False
 
-model1 = Policy()
-model2 = Policy()
-
+model = Policy()
 # learning rate - might be useful to change
-optimizer1 = optim.Adam(model1.parameters(), lr=1e-3)
-optimizer2 = optim.Adam(model2.parameters(), lr=1e-3)
+optimizer = optim.Adam(model.parameters(), lr=3e-3)
 eps = np.finfo(np.float32).eps.item()
 
 
-def select_action(state, model):
+def select_action(state, env):
+    '''given a state, this function chooses the action to take
+    arguments: state - observation matrix specifying the current model state
+               env - integer specifying which environment to sample action
+                         for
+    return - action to take'''   
+    
     state = torch.from_numpy(state).float()
-    # retrain the model
-    mu, sigma, state_value = model(state)
+    # retrain the model - returns 
+    mu1, sigma1, mu2, sigma2, state_value = model(state)
+    # mu1 sigma 1 correspond to environment 1
+    # mu2 sigma 2 correspond to environment 2
+    
+    # decide which mu and sigma to use depending on the env being trained
+    if env == 1:
+        mu = mu1
+        sigma = sigma1
+    if env == 2:
+        mu = mu2
+        sigma = sigma2
 
     # debugging
     if False:
         print(mu)
         print(state_value)
-        print(model.sigma2_head.weight)
+        print(model.sigma2_head_env1.weight)
+        print(model.sigma2_head_env2.weight)    
         print(model.affine1.weight)
     # if sigma is nan
     if sigma != sigma:
         print(mu)
         print(state_value)
-        print(model.sigma2_head.weight)
+        # print out the weights
+        print(model.sigma2_head_env1.weight)
+        print(model.sigma2_head_env2.weight)    
         sigma = torch.tensor(float(0.1))
         print('sigma is nan')
         exit()
@@ -143,7 +202,7 @@ def select_action(state, model):
     return action.item()
 
 
-def finish_episode(state, model, optimizer):
+def finish_episode(state):
     R = torch.zeros(1, 1)
     R = Variable(R)
     saved_actions = model.saved_actions
@@ -175,29 +234,6 @@ def finish_episode(state, model, optimizer):
     loss = (torch.stack(policy_losses).sum() + 0.5*torch.stack(value_losses).sum() \
             - torch.stack(model.entropies).sum() * 0.0001)
 
-    lmda = 0.0001
-
-    affine1loss = model1.affine1.weight - model2.affine1.weight 
-    mu_head_loss = model1.mu_head.weight - model2.mu_head.weight
-    sigma_head_loss = model1.sigma2_head.weight - model2.sigma2_head.weight
-    value_head_loss = model1.value_head.weight - model2.value_head.weight
-
-    for weight in affine1loss:
-        for w in weight:
-            loss += (lmda/2) * (math.pow(w, 2))
-
-    for weight in mu_head_loss:
-        for w in weight:
-            loss += (lmda/2) * (math.pow(w, 2))
-
-    for weight in sigma_head_loss:
-        for w in weight:
-            loss += (lmda/2) * (math.pow(w, 2))
-
-    for weight in value_head_loss:
-        for w in weight:
-            loss += (lmda/2) * (math.pow(w, 2))
-
     # Debugging
     if False:
         print(loss, 'loss')
@@ -228,36 +264,37 @@ def main():
         state2 = env2.reset()
 
         for t in range(10000):  # Don't infinite loop while learning
-            # env1 network
-            action1 = select_action(state1, model1)
-            state1, reward1, done, _ = env1.step(action1)
-            reward1 = max(min(reward1, 1), -1)
+            if t % 2 == 0:
+                state = state1  # variable used for finishing
+                # train environment 1 half the time
+                action = select_action(state1, 1)
+                state1, reward, done, _ = env1.step(action)
+                if done:
+                    break
+            if t% 2 == 1:
+                # train environment 2 other half of the time
+                state = state1  # variable used for finishing                
+                action = select_action(state2, 2)
+                state2, reward, done, _ = env2.step(action)
+                if done:
+                    break
+            # clip the rewards (?)
+            reward = max(min(reward, 1), -1)
+            # render if arguments specify it
             if args.render:
-                env1.render()
-            model1.rewards.append(reward1)
-            if done:
-                break
-
-            # env2 network
-            action2 = select_action(state2, model2)
-            state2, reward2, done, _ = env2.step(action2)
-            reward2 = max(min(reward2, 1), -1)
-            if args.render:
-                env2.render()
-            model2.rewards.append(reward2)
-            if done:
-                break
-
+                env.render()
+            # keep running list of all rewards
+            model.rewards.append(reward)    
+            
+        t = int(t/2)  #divide by two because we alternated between two environments
+        # update our running reward
         running_reward = running_reward * 0.99 + t * 0.01
-        finish_episode(state1, model1, optimizer1)
-        finish_episode(state2, model2, optimizer2)
+        finish_episode(state)
         if i_episode % args.log_interval == 0:
             print('Episode {}\tLast length: {:5d}\tAverage length: {:.2f}'.format(
                 i_episode, t, running_reward))
-
-        #print("env1 reward threshold {}".format(env1.spec.reward_threshold))
-        #print("env2 reward threshold {}".format(env2.spec.reward_threshold))
-        if running_reward > env1.spec.reward_threshold and running_reward > env2.spec.reward_threshold:
+        # for now use env1 reward threshold
+        if running_reward > env1.spec.reward_threshold:
             print("Solved! Running reward is now {} and "
                   "the last episode runs to {} time steps!".format(running_reward, t))
             break
