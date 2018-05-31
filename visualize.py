@@ -53,8 +53,8 @@ env_list = [env2dir[key] for key in env2dir]
 tech_list = ["hard_param", "soft_param", "fine_tuning", \
                          "distillation", "baseline"]
 
-# global reward threshold
-REWARD_THRESHOLD = 30
+# global reward threshold - used to determine convergence times
+REWARD_THRESHOLD = 950
 
 
 def init_list(env_names):

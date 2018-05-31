@@ -23,6 +23,31 @@ Fine tuning is done on pairs of two environments. The second environment is pass
 
 pythonw fine_tuning.py --envs HighGravityInvertedPendulum-v0
 
+pythonw fine_tuning.py --env LowGravityInvertedPendulum-v0
+ 
+pythonw fine_tuning.py --env HighFrictionInvertedPendulum-v0
+
+pythonw fine_tuning.py --env LowFrictionInvertedPendulum-v0
+
+pythonw fine_tuning.py --env LongInvertedPendulum-v0
+
 The high gravity environment should be replaced by each of the other 
 environments (do not pass InvertedPendulum-v2)
+
+Baseline:
+------------------
+The baseline performance is calculated by running the hard parameter sharing
+with a single environment
+
+pythonw hard_param.py --env InvertedPendulum-v2
+ 
+pythonw hard_param.py --env HighGravityInvertedPendulum-v0  
+
+pythonw hard_param.py --env LowGravityInvertedPendulum-v0
+ 
+pythonw hard_param.py --env HighFrictionInvertedPendulum-v0
+
+pythonw hard_param.py --env LowFrictionInvertedPendulum-v0
+
+pythonw hard_param.py --env LongInvertedPendulum-v0  
 
