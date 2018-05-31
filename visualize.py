@@ -40,7 +40,11 @@ env2dir = {'InvertedPendulum-v2': 'full_pend',
 
 # Update this with other environments!!
 
-# global list of multitasking techniques
+# global list of environment directories (not environment full names)
+# used for error checking
+env_list = [env2dir[key] for key in env2dir]
+
+# global list of multitasking techniques - used for error checking
 tech_list = ["hard_param", "soft_param", "fine_tuning", \
                          "distillation", "baseline"]
 
@@ -77,6 +81,13 @@ def update_records(roll_length, run_reward, length_records, rr_records):
         rr_records[i].append(run_reward[i])
     
     return length_records, rr_records
+
+def update_fine(roll_length, run_reward, length_records, rr_records, env):
+    '''custom function for updating the fine_tuning records - necessary
+       because fine_tuning does not simultaneously train multiple
+       environments'''
+    
+    
 
 def pickle_list(technique, env_names, length_records, rr_records):
     '''stores the trial records as binary files using the pickle library. The
@@ -166,6 +177,15 @@ def graph_length(technique, env):
     '''graphs the length of the run versus the episode of all trials for
     a given technique and environment; also graphs the average'''
     
+    if technique not in tech_list:
+        print("technique not found! - returning without plotting")
+        print("List of techniques: ", tech_list)
+        return
+    if env not in env_list:
+        print("environment not found! - returning without plotting")
+        print("List of envs", env_list)
+        return
+    
     graph_gen(technique, env, "length")
     
     return
@@ -173,6 +193,15 @@ def graph_length(technique, env):
 def graph_reward(technique, env):
     '''graphs the length of the run versus the episode of all trials for
     a given technique and environment; also graphs the average'''
+       
+    if technique not in tech_list:
+        print("technique not found! - returning without plotting")
+        print("List of techniques: ", tech_list)
+        return
+    if env not in env_list:
+        print("environment not found! - returning without plotting")
+        print("List of envs", env_list)
+        return
     
     graph_gen(technique, env, "run_reward")
     
@@ -185,27 +214,10 @@ def graph_gen(technique, env, data_type):
     then combines the data from each individual file into a single array
     and plots each individual trial. The function calls compute_mean_list
     to compute the average line, which is also plotted.'''
-    # path to the folder of trial records
-    search_path = os.path.join(HOME, 'trial_records')
-    # path to the correct technique
-    search_path = os.path.join(search_path, technique)
-    # path to the correct environment within the technique
-    search_path = os.path.join(search_path, env)
-    # switch to directory the file is in
-    os.chdir(search_path)
-    
-    # generate list of files with the data we're interested in
-    file_list = [x for x in os.listdir() if data_type in x]
-    
-    # list of all the data
-    data_list = []
-    # iterate through the trials in the directory
-    for trial_file in file_list:
-        f = open(trial_file, "rb")
-        # add trial data list to the main data list
-        data_list.append(pickle.load(f))
-        f.close()
-        
+
+    # get single list with all trial data for technique, environment, and
+    # data_type triplet
+    data_list = get_combined_list(technique, env, data_type)
     print("%d data files found" %len(data_list))
     print("Computing mean of trials...")
     # list of the mean data
@@ -234,12 +246,55 @@ def graph_gen(technique, env, data_type):
     
     return
 
-def trial_summary(technique_env):
-    '''for a given technique and environment outputs a text file
-    with the average convergence time and standard deviation'''
+def trial_summary():
+    '''generates summary data for all technique-environment pairs'''
+    # switch to directory to dump all the data
+    os.chdir(os.path.join(HOME, 'summary'))
+    print("Overwriting previous summary file...")
+    summary = open("summary.txt", 'w')
+    # number of combinations for which summary data was generated
+    num_sum = 0
     
-    #TODO
-    
+    # go through all techniques and environment pairs
+    for tech in tech_list:
+        for env in env_list:
+            # get all data combined
+            roll_lengths = get_combined_list(tech, env, 'length')
+            running_rewards = get_combined_list(tech, env, 'run_reward')
+            
+            if roll_lengths == []:
+                # this technique-environment combo has no data! Move on!
+                continue
+
+            num_sum += 1  # increment number of pairings for which we have data
+            # get average run data
+            mean_lengths = compute_mean_list(roll_lengths)
+            mean_rewards = compute_mean_list(running_rewards)
+                        
+            # save the mean length         
+            file_name = tech + '_' + env + '_mean_length.p'
+            f = open(file_name, "wb" )
+            pickle.dump(mean_lengths, f)
+            f.close()    
+            
+            # save the mean running reward
+            file_name = tech + '_' + env + '_mean_running_reward.p'
+            f = open(file_name, "wb" )
+            pickle.dump(mean_rewards, f)
+            f.close() 
+            
+            # list of convergence times for each trial
+            conv_times = [len(x) for x in running_rewards]
+            out_string = "Technique:   %s   Environment:   %s \n \
+                          Average Convergence Time:            %.1f\n \
+                          Convergence Time Standard Deviation: %.1f\n \
+                          Number of trials:                   %d\n\n" \
+                          %(tech, env, np.mean(conv_times), \
+                            np.std(conv_times), len(conv_times))
+            
+            summary.write(out)
+    summary.close()
+    print("Summaries for %d technique environment combos generated" %num_sum)
     return
 
 def compute_mean_list(data_list):
@@ -250,6 +305,9 @@ def compute_mean_list(data_list):
     end of the mean_list is not the average of a small number of trials
     arguments: data_list - list of all data
     return value: average_list - 1D list with the average at each episode'''
+    
+    if len(data_list) == 0:
+        return []
     
     # list of how long each element is
     length_list = [len(x) for x in data_list]
@@ -271,7 +329,51 @@ def compute_mean_list(data_list):
         average_list[i] = trial_sum/num_trials
         
     return average_list
+
+def get_combined_list(technique, environment, data_type):
+    '''helper function that puts the data from multiple trials
+    together into a single list
+    arguments: technique - multitask learning technique
+               environment - training environment
+               data_type - (string) "length" or "run_reward"
+    return value: data_list - single list with each element a list
+                              representing one trial'''    
+    # path to the folder of trial records
+    search_path = os.path.join(HOME, 'trial_records')
+    # path to the correct technique
+    search_path = os.path.join(search_path, technique)
+    # path to the correct environment within the technique
+    search_path = os.path.join(search_path, env)
+    # switch to directory the file is in
+    os.chdir(search_path)
+    
+    # generate list of files with the data we're interested in
+    file_list = [x for x in os.listdir() if data_type in x]
+    
+    # list of all the data
+    data_list = []
+    # iterate through the trials in the directory
+    for trial_file in file_list:
+        f = open(trial_file, "rb")
+        # add trial data list to the main data list
+        data_list.append(pickle.load(f))
+        f.close()
         
+    os.chdir(HOME)
+        
+    return data_list
+
+def graph_compares(techs_evs, data_type, name = "comparison.png"):
+    '''graphs the mean lines for multiple technique-environment pairs
+    on a single graph
+    arguments: tech_evs - list of tuples with each tuple a technique/
+                          environment pair
+               data_type - string either "length" or "run_reward"
+               name - name of saved file'''
+    
+    # TODO
+    
+    return  
 
 def mass_run():
     '''used to invoke graphing or summary functions multiple times'''

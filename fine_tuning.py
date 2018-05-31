@@ -43,6 +43,9 @@ import numpy as np
 from itertools import count
 from collections import namedtuple
 
+# used for recording run time data (FOR_RECORD)
+import visualize
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -64,6 +67,11 @@ parser.add_argument('--log-interval', type=int, default=10, metavar='N',
 parser.add_argument('--envs', action='append', nargs='+', type=str)
 
 
+# global lists for recording run time behavior - initialized by init_list
+# (FOR_RECORD)
+length_records = []    # length of each run for each episode
+rr_records = []        # running rewards for each episode
+
 args = parser.parse_args()
 
 
@@ -74,6 +82,8 @@ env1 = gym.make('InvertedPendulum-v2')
 #second environment
 env2 = gym.make('HalfInvertedPendulum-v0')
 
+# hardcoded - finetuning only tries these two environments
+envs_names = ['InvertedPendulum-v2', 'HalfInvertedPendulum-v0']
 
 
 SavedAction = namedtuple('SavedAction', ['log_prob', 'value'])
@@ -249,6 +259,10 @@ def main():
     env1_training_time = 0    # number of episodes to train env1
     env2_training_time = 0    # episodes to train env2
     
+    # initialize the record lists to the proper length (FOR_RECORD)
+    length_records = visualize.init_list(envs_names)
+    rr_records = visualize.init_list(envs_names)    
+    
     for i_episode in count(1): # loop and train
         # environment 1 is fully trained
         if env1_trained:
@@ -273,6 +287,17 @@ def main():
         
         # update our running reward
         running_reward = running_reward * 0.99 + t * 0.01
+        
+        if env1_trained:
+            # call function to record run data (FOR_RECORD)
+            length_records, rr_records = visualize.update_records(\
+                roll_length, run_reward, length_records, rr_records)             
+        else:
+            # call function to record run data (FOR_RECORD)
+            length_records, rr_records = visualize.update_records(\
+                roll_length, run_reward, length_records, rr_records)             
+        
+       
         # call function to update our neural net
         finish_episode(freeze)
         
@@ -281,7 +306,7 @@ def main():
             print('Episode {}\tLast length: {:5d}\tAverage length: {:.2f}'.format(
                 i_episode, t, running_reward))
             
-        # reach here when the environment is finished training
+        # reach here when the first environment is finished training
         if running_reward > env.spec.reward_threshold:
             print("Solved! Running reward is now {} and "
                   "the last episode runs to {} time steps!".format(running_reward, t))
@@ -289,7 +314,9 @@ def main():
                 # if env1 already trained and we reach here again then
                 # both environments have been trained
                 break
+            # only reach here after first environment has been trained
             env1_trained = True
+            running_reward = 10   # reset the running reward
     # finished with everything - print out summary
     print("Time to train environment 1: ", env1_training_time)
     print("Time to train environment 2: ", env2_training_time)
