@@ -165,7 +165,8 @@ model1 = Policy()
 model2 = Policy()
 
 # learning rate - might be useful to change
-optimizer = optim.Adam(model1.parameters(), lr=1e-4)
+optimizer1 = optim.Adam(model1.parameters(), lr=1e-3)
+optimizer2 = optim.Adam(model2.parameters(), lr=1e-3)
 eps = np.finfo(np.float32).eps.item()
 
 
@@ -189,11 +190,11 @@ def select_action(state, env):
     # decide which mu and sigma to use depending on the env being trained
     if env == 1:
         model = model1
-        mu, sigma, state_value = model1.forward(state)
+        mu, sigma, state_value = model1(state)
         saved_actions = model1.saved_actions
     if env == 2:
         model = model2
-        mu, sigma, state_value = model2.forward(state)
+        mu, sigma, state_value = model2(state)
         saved_actions = model2.saved_actions
 
     # debugging
@@ -267,7 +268,7 @@ def finish_episode(state, env):
     loss = (torch.stack(policy_losses).sum() + 0.5*torch.stack(value_losses).sum() \
             - torch.stack(model.entropies).sum() * 0.0001) 
 
-    lmda = 0.01
+    lmda = 0
 
     affine1loss = model1.affine1.weight - model2.affine1.weight 
     mu_head_loss = model1.mu_head_env.weight - model2.mu_head_env.weight
@@ -296,7 +297,7 @@ def finish_episode(state, env):
     # compute gradients
     loss.backward()
 
-    nn.utils.clip_grad_norm_(model.parameters(), 20)
+    nn.utils.clip_grad_norm_(model.parameters(), 40)
 
     # Debugging
     if False:
@@ -322,29 +323,29 @@ def main():
         state2 = env2.reset()
 
         for t in range(10000):  # Don't infinite loop while learning
-            if t % 2 == 0:
-                state = state1  # variable used for finishing
-                # train environment 1 half the time
-                action = select_action(state1, 1)
-                state1, reward, done, _ = env1.step(action)
-                reward = max(min(reward, 1), -1)
-                # add parameter regularization for soft parameter sharing
-                model1.rewards_env.append(reward)
-                if args.render:
-                    env1.render()
-                if done:
-                    break
-            if t % 2 == 1:
+            #if t % 2 == 0:
+            '''state = state1  # variable used for finishing
+            # train environment 1 half the time
+            action = select_action(state1, 1)
+            state1, reward, done, _ = env1.step(action)
+            reward = max(min(reward, 1), -1)
+            # add parameter regularization for soft parameter sharing
+            model1.rewards_env.append(reward)
+            if args.render:
+                env1.render()
+            if done:
+                break'''
+            #if t % 2 == 1:
                 # train environment 2 other half of the time
-                state = state2  # variable used for finishing
-                action = select_action(state2, 2)
-                state2, reward, done, _ = env2.step(action)
-                reward = max(min(reward, 1), -1)
-                model2.rewards_env.append(reward)
-                if args.render:
-                    env2.render()
-                if done:
-                    break
+            state = state2  # variable used for finishing
+            action = select_action(state2, 2)
+            state2, reward, done, _ = env2.step(action)
+            reward = max(min(reward, 1), -1)
+            model2.rewards_env.append(reward)
+            if args.render:
+                env2.render()
+            if done:
+                break
             # clip the rewards (?)
             #reward = max(min(reward, 1), -1)
             # render if arguments specify it
@@ -353,14 +354,17 @@ def main():
 
             #model.rewards_env1.append(reward)
 
-        t = int(t/2)  #divide by two because we alternated between two environments
+       # t = int(t/2)  #divide by two because we alternated between two environments
         # update our running reward
         running_reward = running_reward * 0.99 + t * 0.01
-        finish_episode(state1, 1)
+        #finish_episode(state1, 1)
         finish_episode(state2, 2)
         if i_episode % args.log_interval == 0:
             print('Episode {}\tLast length: {:5d}\tAverage length: {:.2f}'.format(
                 i_episode, t, running_reward))
+
+        print("env1 reward threshold {}".format(env1.spec.reward_threshold))
+        print("env2 reward threshold {}".format(env2.spec.reward_threshold))
         # for now use env1 reward threshold
         if running_reward > env1.spec.reward_threshold and running_reward > env2.spec.reward_threshold:
             print("Solved! Running reward is now {} and "
