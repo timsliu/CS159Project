@@ -36,7 +36,11 @@ HOME = os.getcwd()
 # dictionary mapping each environment name to a directory    
 env2dir = {'InvertedPendulum-v2': 'full_pend', 
            'HalfInvertedPendulum-v0': 'half_pend',
-           'LongInvertedPendulum-v0': 'long_pend'}
+           'LongInvertedPendulum-v0': 'long_pend',
+           'HighGravityInvertedPendulum-v0': 'high_grav',
+           'LowGravityInvertedPendulum-v0': 'low_grav',
+           'LowFrictionInvertedPendulum-v0': 'low_friction',
+           'HighFrictionInvertedPendulum-v0': 'high_friction'}
 
 # Update this with other environments!!
 

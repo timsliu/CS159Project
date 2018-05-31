@@ -16,7 +16,7 @@ _________________
 3) Replace the __init__.py file in 
 _________________
 
-/anaconda/lib/python2.6/site_packages/gym/envs/
+/anaconda/lib/python3.6/site_packages/gym/envs/
 
 with the version in this directory. This will register the new environment.
 

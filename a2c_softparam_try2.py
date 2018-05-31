@@ -11,6 +11,9 @@ import numpy as np
 from itertools import count
 from collections import namedtuple
 
+# used for recording run time data (FOR_RECORD)
+import visualize
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -33,14 +36,36 @@ parser.add_argument('--entropy-coef', type=float, default=0.01)
 args = parser.parse_args()
 pi = Variable(torch.FloatTensor([math.pi]))
 
-#uncomment one of these to switch between environments
+
+# global lists for recording run time behavior - initialized by init_list
+# (FOR_RECORD)
+length_records = []    # length of each run for each episode
+rr_records = []        # running rewards for each episode
+
+
+# read in which second environment to train on
+envs_names = args.envs[0]
+if len(envs_names) != 1:
+    print("Can only train one additional environment!")
+exit()
+
+#first environment
 env1 = gym.make('InvertedPendulum-v2')
-env2 = gym.make('HalfInvertedPendulum-v0')
+#second environment
+env2 = gym.make(envs_names[0])
+
+# soft parameter sharing only tries these two environments
+envs_names = ['InvertedPendulum-v2', envs_names[0]]
+
+# always have two environments
+num_envs = 2
+
+
 '''Max_action = env.action_space.high
 Min_action = env.action_space.low'''
-env1.seed(args.seed)
-env2.seed(args.seed)
-#torch.manual_seed(args.seed)
+
+
+
 
 
 SavedAction = namedtuple('SavedAction', ['log_prob', 'value'])
@@ -221,6 +246,11 @@ def finish_episode(state, model, optimizer):
 
 def main():
     running_reward = 10
+    
+    # running reward for the two environments
+    run_reward = np.array([10 for i in range(num_envs)])
+    # length of episode for the two environments
+    roll_length = np.array([0 for i in range(num_envs)])    
 
     for i_episode in count(1):
         # random initialization

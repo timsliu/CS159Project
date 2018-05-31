@@ -8,7 +8,11 @@
 # trained and the number of episodes to learn the new environment is printed.
 # The neural net has a single actor and a single critic head.
 #
-# USAGE: No arguments passed
+# USAGE: pass --envs <one environemnt>
+#
+# The neural net is always first trained on one environment and then the
+# network is frozen and trained on a second environment (passed as the 
+# argument)
 #
 #
 #
@@ -31,6 +35,7 @@
 #                        after the first environment is trained
 # Tim Liu    05/28/18    removed manual seeding of environment and torch
 # Tim Liu    05/28/18    corrected bug so affine layer actually freezes
+# Tim Liu    05/31/18    changed so user can pass what env to train
 
 
 
@@ -77,14 +82,19 @@ args = parser.parse_args()
 
 pi = Variable(torch.FloatTensor([math.pi]))
 
+# read in which second environment to train on
+envs_names = args.envs[0]
+if len(envs_names) != 1:
+    print("Can only train one additional environment!")
+exit()
+
 #first environment
 env1 = gym.make('InvertedPendulum-v2')
 #second environment
-env2 = gym.make('HalfInvertedPendulum-v0')
+env2 = gym.make(envs_names[0])
 
-# hardcoded - finetuning only tries these two environments
-envs_names = ['InvertedPendulum-v2', 'HalfInvertedPendulum-v0']
-# DO NOT MODIFY THESE
+# finetuning only tries these two environments
+envs_names = ['InvertedPendulum-v2', envs_names[0]]
 
 
 SavedAction = namedtuple('SavedAction', ['log_prob', 'value'])
@@ -324,7 +334,7 @@ def main():
     print("Time to train environment 1: ", env1_training_time)
     print("Time to train environment 2: ", env2_training_time)
     
-    # save the list 
+    # save the list (FOR_RECORD)
     visualize.pickle_list('fine_tuning', envs_names, length_records, rr_records)
 
 
