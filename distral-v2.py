@@ -214,7 +214,8 @@ def finish_episode():
 
         kl = kl + list(map(lambda x, y: x *y, map(lambda i: args.gamma**(i[0]+1), enumerate(list(model.div[env_idx]))), list(model.dix[env_idx])))
 
-        temp = _model.div[env_idx]
+        temp = model.div[env_idx]
+        ix = 0
         for (log_prob, value), r in zip(saved_actions, rewards):
             # reward is the delta param
             value += Variable(torch.randn(value.size()))
@@ -227,6 +228,7 @@ def finish_episode():
             # feeds a weird difference between value and the reward
             value_losses.append(F.smooth_l1_loss(value, torch.tensor([r])))
 
+            temp = model.div[env_idx][ix] *
 
 
     loss = (torch.stack(policy_losses).sum() + \
