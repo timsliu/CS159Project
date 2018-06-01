@@ -320,7 +320,7 @@ def main():
                 i_episode, t, running_reward))
             
         # reach here when the first environment is finished training
-        if running_reward > 30:
+        if running_reward > env.spec.reward_threshold:
             print("Solved! Running reward is now {} and "
                   "the last episode runs to {} time steps!".format(running_reward, t))
             if env1_trained:
