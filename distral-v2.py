@@ -188,7 +188,6 @@ def finish_episode():
     entropy_sum = 0
     loss = torch.zeros(1, 1)
     loss = Variable(loss)
-    kl = []
 
     for env_idx in range(num_envs):
         saved_actions = model.saved_actions[env_idx]
@@ -212,10 +211,6 @@ def finish_episode():
         #    rewards = rewards + gamma * model.div[env_idx][i]
         #    gamma = gamma * args.gamma
 
-        kl = kl + list(map(lambda x, y: x *y, map(lambda i: args.gamma**(i[0]+1), enumerate(list(model.div[env_idx]))), list(model.dix[env_idx])))
-
-        temp = model.div[env_idx]
-        ix = 0
         for (log_prob, value), r in zip(saved_actions, rewards):
             # reward is the delta param
             value += Variable(torch.randn(value.size()))
@@ -227,9 +222,6 @@ def finish_episode():
             # https://pytorch.org/docs/master/nn.html#torch.nn.SmoothL1Loss
             # feeds a weird difference between value and the reward
             value_losses.append(F.smooth_l1_loss(value, torch.tensor([r])))
-
-            temp = model.div[env_idx][ix] *
-
 
     loss = (torch.stack(policy_losses).sum() + \
             0.5*torch.stack(value_losses).sum() + 0.002*torch.stack(model.kl).sum()- \
@@ -266,7 +258,7 @@ def finish_episode():
     model.log_prob = [[] for i in range(model.num_envs)]
     model.kl = []
     model.ent = []
-
+    
 def main():
 
     # initialize the record lists to the proper length (FOR_RECORD)
