@@ -1,0 +1,13 @@
+\begin{center}
+\begin{tabular}{|m{1.7 cm}|m{1.7 cm}|m{1.7 cm}|m{1.7 cm}|}
+\hline
+\multicolumn{4}{|c|}{Convergence Performance for full pend}\\ \hline
+&Mean&Std. Dev&Trials\\ \hline
+hard param & 886.7 & 210.9 & 15.0\\ \hline
+soft param & 1050.6 & 188.1 & 22.0\\ \hline
+fine tuning & 1165.1 & 319.8 & 85.0\\ \hline
+distral & 572.5 & 42.2 & 10.0\\ \hline
+distillation & 494.1 & 8.6 & 10.0\\ \hline
+baseline & 1149.1 & 327.1 & 28.0\\ \hline
+\end{tabular}
+\end{center}

@@ -14,6 +14,8 @@
 #                 of the trials by looking at the length of arrays
 # mean_list - helper function for calculating average of many trials
 # mass_run - used to invoke graphing and trial functions many times
+# make_table - creates latex formatted table from 2D python list
+# TABLE OF CONTENTS IS OUT OF DATE
 
 
 # Revision History
@@ -22,6 +24,7 @@
 # Tim Liu    05/30/18    wrote plotting functions
 # Tim Liu    05/30/18    updated so all plots go to a single folder
 # Tim Liu    05/30/18    fixed bug that miscalculated run lengths
+# Tim Liu    06/01/18    added graph_tech and graph_env
 
 
 import pickle
@@ -248,7 +251,9 @@ def graph_gen(technique, env, data_type):
     os.chdir(os.path.join(plot_path, 'all_plots'))
     
     for trial in data_list:
-        plt.plot(trial, linewidth = 1, color = 'lightskyblue')
+        plt.plot(trial, linewidth = 0.1, color = 'lightskyblue')
+
+            
         
     title_string = technique + "_" + env + "_" + data_type + '.png'
     # plot the average line
@@ -263,6 +268,7 @@ def graph_gen(technique, env, data_type):
     plt.savefig(title_string)
     print("New file %s saved to all_plots" %title_string)
     plt.close()
+    plt.xlim(0, 1200)
         
     os.chdir(HOME)
     
@@ -277,9 +283,14 @@ def trial_summary():
     # number of combinations for which summary data was generated
     num_sum = 0
     
+    # list of summary data
+    # each sublist is for a single environment
+    # each sub-sub list is for a single technique and holds mean, std, and n
+    summary_data = [[] for x in range(len(env_list))]
+    
     # go through all techniques and environment pairs
-    for tech in tech_list:
-        for env in env_list:
+    for envi, env in enumerate(env_list):
+        for tech in tech_list:
             # get all data combined
             roll_lengths = get_combined_list(tech, env, 'length')
             running_rewards = get_combined_list(tech, env, 'run_reward')
@@ -320,9 +331,33 @@ def trial_summary():
                             np.std(conv_times), len(conv_times))
             
             summary.write(out_string)
+            
+            # summary of technique performance
+            tech_sum = [np.mean(conv_times), np.std(conv_times),\
+                        len(conv_times)]
+            
+            # add technique to the summary list for the environment
+            summary_data[envi].append(tech_sum)
     summary.close()
     print("Summaries for %d technique environment combos generated" %num_sum)
+    
+    gen_tables(summary_data)
+    
     return
+
+def gen_tables(summary_data):
+    '''calls make_table to generate summary data tables for each
+    environment
+    arguments - summary_data: 3D table of data'''
+    
+    col_labels = ['Mean', "Std. Dev", "Trials"]
+    row_labels = tech_list
+    for (envi, env_data) in enumerate(summary_data):
+        title = "Convergence Performance for %s" %env_list[envi]
+        make_table(col_labels, row_labels, env_data, title, env_list[envi])
+        
+    return
+    
 
 def get_convergence_times(running_rewards):
     '''returns a list of when the trials surpassed the reward threshold
@@ -419,8 +454,8 @@ def graph_tech(tech, data_type):
     
     # filter by correct technique
     file_list = [x for x in os.listdir() if tech in x]
-    # filter by correct data type
-    file_list = [x for x in file_list if data_type in x]
+    # filter by correct data type and alphabetize it
+    file_list = sorted([x for x in file_list if data_type in x])
     
     legends = []
     all_data = []
@@ -438,9 +473,12 @@ def graph_tech(tech, data_type):
     
     # switch to plots folder
     os.chdir(os.path.join(os.path.join(HOME, 'trial_records'), 'all_plots'))
-    for (i, data) in enumerate(all_data): 
-        plt.plot(data, linewidth = 2, color = colors[i], label = legends[i])
-        # title and label the plot
+    for (i, data) in enumerate(all_data):
+        if data_type == 'running_reward':
+            plt.plot(data, linewidth = 2, color = colors[i], label = legends[i])
+        if data_type == 'length':
+            plt.scatter(list(range(len(data))), data, s = 1, color = colors[i], label = legends[i])
+            
         
     title_string = "%s of environments for %s" %(data_type, tech)
     plt.title(title_string)
@@ -449,7 +487,8 @@ def graph_tech(tech, data_type):
     plt.legend()
     plt.grid(True)
     
-    plt.savefig(title_string + '.png')
+    fig_name = "%s_%s.png" %(data_type, tech)
+    plt.savefig(fig_name)
     plt.close()
     
     return  
@@ -465,8 +504,8 @@ def graph_env(env, data_type):
     
     # filter by correct technique
     file_list = [x for x in os.listdir() if env in x]
-    # filter by correct data type
-    file_list = [x for x in file_list if data_type in x]
+    # filter by correct data type and alphabetize it
+    file_list = sorted([x for x in file_list if data_type in x])
     
     legends = []
     all_data = []
@@ -485,8 +524,10 @@ def graph_env(env, data_type):
     # switch to plots folder
     os.chdir(os.path.join(os.path.join(HOME, 'trial_records'), 'all_plots'))
     for (i, data) in enumerate(all_data): 
-        plt.plot(data, linewidth = 2, color = colors[i], label = legends[i])
-        # title and label the plot
+        if data_type == 'running_reward':
+            plt.plot(data, linewidth = 2, color = colors[i], label = legends[i])
+        if data_type == 'length':
+            plt.scatter(list(range(len(data))), data, s = 1, color = colors[i], label = legends[i])
         
     title_string = "%s of techniques for %s" %(data_type, env)
     plt.title(title_string)
@@ -495,7 +536,8 @@ def graph_env(env, data_type):
     plt.legend()
     plt.grid(True)
     
-    plt.savefig(title_string + '.png')
+    fig_name = "%s_%s.png" %(data_type, env)
+    plt.savefig(fig_name)
     plt.close()
     
     return 
@@ -503,10 +545,52 @@ def graph_env(env, data_type):
 def mass_run():
     '''used to invoke graphing or summary functions multiple times'''
     for tech in tech_list:
-        graph_tech(tech, "running_reward")
-        graph_tech(tech, "length")
-    for env in env_list:
-        graph_env(env, "running_reward")
-        graph_env(env, "length")
+        graph_length(tech, 'high_grav')
     
+    return
+
+
+def make_table(c, r, data, title, env):
+    '''prints string of latex formatted table
+    inputs: c - list of colum labels
+            r - list of row labels
+            data - 2D array of data
+            title - title of plot
+    outputs: prints latex string
+    return: none'''
+    
+    if len(data) == 0:
+        print("empty data string - returning...")
+        return
+    
+    # open file to write to
+    f = open(env + "_table.txt", "w")
+    
+    # generate table to write
+    out_string = ''
+    out_string += '\\begin{center}\n'
+    out_string += '\\begin{tabular}{'
+    out_string += (len(c) + 1)* "|m{1.7 cm}" + "|}\n"
+    out_string += '\hline\n'
+    out_string += '\multicolumn{%d}{|c|}{%s}\\\ \hline' %((len(c)+1), title) + '\n'
+    for col in c:
+        out_string += '&' + col
+    out_string += '\\\ \hline\n'
+    #iterate through data and print data
+    for row in range(len(r)):
+        out_string += r[row]     
+        for col in range(len(c)):
+            out_string += ' & ' + '%.1f' %data[row][col]
+        out_string += '\\\ \hline\n'
+    out_string += '\end{tabular}\n'
+    out_string += '\end{center}\n'
+    
+    # replace underscore with space
+    out_string = out_string.replace("_", " ")
+    # now write out the string
+    f.write(out_string)
+    
+    f.close()
+    
+    print("file:  %s_table.txt successfully written" %(env))
     return

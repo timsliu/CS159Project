@@ -1,0 +1,13 @@
+\begin{center}
+\begin{tabular}{|m{1.7 cm}|m{1.7 cm}|m{1.7 cm}|m{1.7 cm}|}
+\hline
+\multicolumn{4}{|c|}{Convergence Performance for high grav}\\ \hline
+&Mean&Std. Dev&Trials\\ \hline
+hard param & 1043.7 & 177.3 & 15.0\\ \hline
+soft param & 1525.8 & 616.6 & 5.0\\ \hline
+fine tuning & 515.3 & 156.4 & 15.0\\ \hline
+distral & 869.1 & 133.0 & 10.0\\ \hline
+distillation & 558.4 & 10.1 & 10.0\\ \hline
+baseline & 1399.0 & 590.6 & 11.0\\ \hline
+\end{tabular}
+\end{center}

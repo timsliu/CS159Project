@@ -3,64 +3,49 @@ Technique:   hard_param   Environment:   full_pend
             Convergence Time Standard Deviation: 210.9
             Number of trials:                    15
 
+Technique:   soft_param   Environment:   full_pend 
+            Average Convergence Time:            1050.6
+            Convergence Time Standard Deviation: 188.1
+            Number of trials:                    22
+
+Technique:   fine_tuning   Environment:   full_pend 
+            Average Convergence Time:            1165.1
+            Convergence Time Standard Deviation: 319.8
+            Number of trials:                    85
+
+Technique:   distral   Environment:   full_pend 
+            Average Convergence Time:            572.5
+            Convergence Time Standard Deviation: 42.2
+            Number of trials:                    10
+
+Technique:   distillation   Environment:   full_pend 
+            Average Convergence Time:            494.1
+            Convergence Time Standard Deviation: 8.6
+            Number of trials:                    10
+
+Technique:   baseline   Environment:   full_pend 
+            Average Convergence Time:            1149.1
+            Convergence Time Standard Deviation: 327.1
+            Number of trials:                    28
+
 Technique:   hard_param   Environment:   long_pend 
             Average Convergence Time:            896.8
             Convergence Time Standard Deviation: 88.2
             Number of trials:                    15
 
-Technique:   hard_param   Environment:   high_grav 
-            Average Convergence Time:            1043.7
-            Convergence Time Standard Deviation: 177.3
-            Number of trials:                    15
-
-Technique:   hard_param   Environment:   low_grav 
-            Average Convergence Time:            847.0
-            Convergence Time Standard Deviation: 223.9
-            Number of trials:                    15
-
-Technique:   hard_param   Environment:   low_friction 
-            Average Convergence Time:            810.9
-            Convergence Time Standard Deviation: 57.3
-            Number of trials:                    15
-
-Technique:   hard_param   Environment:   high_friction 
-            Average Convergence Time:            971.3
-            Convergence Time Standard Deviation: 466.4
-            Number of trials:                    15
-
-Technique:   fine_tuning   Environment:   full_pend 
-            Average Convergence Time:            1171.1
-            Convergence Time Standard Deviation: 336.7
-            Number of trials:                    75
+Technique:   soft_param   Environment:   long_pend 
+            Average Convergence Time:            1032.2
+            Convergence Time Standard Deviation: 147.4
+            Number of trials:                    5
 
 Technique:   fine_tuning   Environment:   long_pend 
-            Average Convergence Time:            349.7
-            Convergence Time Standard Deviation: 41.6
-            Number of trials:                    15
+            Average Convergence Time:            351.2
+            Convergence Time Standard Deviation: 43.7
+            Number of trials:                    17
 
-Technique:   fine_tuning   Environment:   high_grav 
-            Average Convergence Time:            523.0
-            Convergence Time Standard Deviation: 161.0
-            Number of trials:                    13
-
-Technique:   fine_tuning   Environment:   low_grav 
-            Average Convergence Time:            437.2
-            Convergence Time Standard Deviation: 214.0
-            Number of trials:                    16
-
-Technique:   fine_tuning   Environment:   low_friction 
-            Average Convergence Time:            630.4
-            Convergence Time Standard Deviation: 799.2
-            Number of trials:                    15
-
-Technique:   fine_tuning   Environment:   high_friction 
-            Average Convergence Time:            366.4
-            Convergence Time Standard Deviation: 77.1
-            Number of trials:                    16
-
-Technique:   distillation   Environment:   full_pend 
-            Average Convergence Time:            494.1
-            Convergence Time Standard Deviation: 8.6
+Technique:   distral   Environment:   long_pend 
+            Average Convergence Time:            568.7
+            Convergence Time Standard Deviation: 40.4
             Number of trials:                    10
 
 Technique:   distillation   Environment:   long_pend 
@@ -68,9 +53,59 @@ Technique:   distillation   Environment:   long_pend
             Convergence Time Standard Deviation: 20.2
             Number of trials:                    10
 
+Technique:   baseline   Environment:   long_pend 
+            Average Convergence Time:            1082.5
+            Convergence Time Standard Deviation: 99.9
+            Number of trials:                    11
+
+Technique:   hard_param   Environment:   high_grav 
+            Average Convergence Time:            1043.7
+            Convergence Time Standard Deviation: 177.3
+            Number of trials:                    15
+
+Technique:   soft_param   Environment:   high_grav 
+            Average Convergence Time:            1525.8
+            Convergence Time Standard Deviation: 616.6
+            Number of trials:                    5
+
+Technique:   fine_tuning   Environment:   high_grav 
+            Average Convergence Time:            515.3
+            Convergence Time Standard Deviation: 156.4
+            Number of trials:                    15
+
+Technique:   distral   Environment:   high_grav 
+            Average Convergence Time:            869.1
+            Convergence Time Standard Deviation: 133.0
+            Number of trials:                    10
+
 Technique:   distillation   Environment:   high_grav 
             Average Convergence Time:            558.4
             Convergence Time Standard Deviation: 10.1
+            Number of trials:                    10
+
+Technique:   baseline   Environment:   high_grav 
+            Average Convergence Time:            1399.0
+            Convergence Time Standard Deviation: 590.6
+            Number of trials:                    11
+
+Technique:   hard_param   Environment:   low_grav 
+            Average Convergence Time:            847.0
+            Convergence Time Standard Deviation: 223.9
+            Number of trials:                    15
+
+Technique:   soft_param   Environment:   low_grav 
+            Average Convergence Time:            1146.8
+            Convergence Time Standard Deviation: 291.1
+            Number of trials:                    5
+
+Technique:   fine_tuning   Environment:   low_grav 
+            Average Convergence Time:            423.1
+            Convergence Time Standard Deviation: 205.7
+            Number of trials:                    18
+
+Technique:   distral   Environment:   low_grav 
+            Average Convergence Time:            536.3
+            Convergence Time Standard Deviation: 37.2
             Number of trials:                    10
 
 Technique:   distillation   Environment:   low_grav 
@@ -78,40 +113,65 @@ Technique:   distillation   Environment:   low_grav
             Convergence Time Standard Deviation: 171.7
             Number of trials:                    10
 
+Technique:   baseline   Environment:   low_grav 
+            Average Convergence Time:            1247.9
+            Convergence Time Standard Deviation: 486.5
+            Number of trials:                    8
+
+Technique:   hard_param   Environment:   low_friction 
+            Average Convergence Time:            810.9
+            Convergence Time Standard Deviation: 57.3
+            Number of trials:                    15
+
+Technique:   soft_param   Environment:   low_friction 
+            Average Convergence Time:            1161.4
+            Convergence Time Standard Deviation: 109.2
+            Number of trials:                    5
+
+Technique:   fine_tuning   Environment:   low_friction 
+            Average Convergence Time:            615.7
+            Convergence Time Standard Deviation: 751.8
+            Number of trials:                    17
+
+Technique:   distral   Environment:   low_friction 
+            Average Convergence Time:            575.6
+            Convergence Time Standard Deviation: 41.1
+            Number of trials:                    10
+
 Technique:   distillation   Environment:   low_friction 
             Average Convergence Time:            474.5
             Convergence Time Standard Deviation: 6.6
+            Number of trials:                    10
+
+Technique:   baseline   Environment:   low_friction 
+            Average Convergence Time:            1034.0
+            Convergence Time Standard Deviation: 98.0
+            Number of trials:                    11
+
+Technique:   hard_param   Environment:   high_friction 
+            Average Convergence Time:            971.3
+            Convergence Time Standard Deviation: 466.4
+            Number of trials:                    15
+
+Technique:   soft_param   Environment:   high_friction 
+            Average Convergence Time:            1080.5
+            Convergence Time Standard Deviation: 11.5
+            Number of trials:                    2
+
+Technique:   fine_tuning   Environment:   high_friction 
+            Average Convergence Time:            366.7
+            Convergence Time Standard Deviation: 75.0
+            Number of trials:                    18
+
+Technique:   distral   Environment:   high_friction 
+            Average Convergence Time:            578.3
+            Convergence Time Standard Deviation: 40.8
             Number of trials:                    10
 
 Technique:   distillation   Environment:   high_friction 
             Average Convergence Time:            466.8
             Convergence Time Standard Deviation: 6.5
             Number of trials:                    10
-
-Technique:   baseline   Environment:   full_pend 
-            Average Convergence Time:            1184.9
-            Convergence Time Standard Deviation: 357.5
-            Number of trials:                    22
-
-Technique:   baseline   Environment:   long_pend 
-            Average Convergence Time:            1082.5
-            Convergence Time Standard Deviation: 99.9
-            Number of trials:                    11
-
-Technique:   baseline   Environment:   high_grav 
-            Average Convergence Time:            1399.0
-            Convergence Time Standard Deviation: 590.6
-            Number of trials:                    11
-
-Technique:   baseline   Environment:   low_grav 
-            Average Convergence Time:            1247.9
-            Convergence Time Standard Deviation: 486.5
-            Number of trials:                    8
-
-Technique:   baseline   Environment:   low_friction 
-            Average Convergence Time:            1034.0
-            Convergence Time Standard Deviation: 98.0
-            Number of trials:                    11
 
 Technique:   baseline   Environment:   high_friction 
             Average Convergence Time:            1066.1

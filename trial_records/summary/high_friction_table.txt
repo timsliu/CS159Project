@@ -1,0 +1,13 @@
+\begin{center}
+\begin{tabular}{|m{1.7 cm}|m{1.7 cm}|m{1.7 cm}|m{1.7 cm}|}
+\hline
+\multicolumn{4}{|c|}{Convergence Performance for high friction}\\ \hline
+&Mean&Std. Dev&Trials\\ \hline
+hard param & 971.3 & 466.4 & 15.0\\ \hline
+soft param & 1080.5 & 11.5 & 2.0\\ \hline
+fine tuning & 366.7 & 75.0 & 18.0\\ \hline
+distral & 578.3 & 40.8 & 10.0\\ \hline
+distillation & 466.8 & 6.5 & 10.0\\ \hline
+baseline & 1066.1 & 101.6 & 11.0\\ \hline
+\end{tabular}
+\end{center}
