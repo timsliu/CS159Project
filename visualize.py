@@ -390,7 +390,6 @@ def get_combined_list(technique, env, data_type):
     
     # generate list of files with the data we're interested in
     file_list = [x for x in os.listdir() if data_type in x]
-    print(file_list)
     
     # list of all the data
     data_list = []

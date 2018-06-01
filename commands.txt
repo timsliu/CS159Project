@@ -14,6 +14,14 @@ Soft parameter sharing is done on pairs of two environments. The second environm
 
 pythonw a2c_softparam_try2.py --envs HighGravityInvertedPendulum-v0
 
+pythonw a2c_softparam_try2.py --env LowGravityInvertedPendulum-v0
+ 
+pythonw a2c_softparam_try2.py --env HighFrictionInvertedPendulum-v0
+
+pythonw a2c_softparam_try2.py --env LowFrictionInvertedPendulum-v0
+
+pythonw a2c_softparam_try2.py --env LongInvertedPendulum-v0
+
 The high gravity environment should be replaced by each of the other 
 environments (do not pass InvertedPendulum-v2)
 
