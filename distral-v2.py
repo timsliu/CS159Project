@@ -258,13 +258,13 @@ def finish_episode():
     model.log_prob = [[] for i in range(model.num_envs)]
     model.kl = []
     model.ent = []
-
-def main():
     
+def main():
+
     # initialize the record lists to the proper length (FOR_RECORD)
     length_records = visualize.init_list(envs_names)
     rr_records = visualize.init_list(envs_names)
-    
+
     running_reward = 10
     run_reward = np.array([10 for i in range(num_envs)])
     roll_length = np.array([0 for i in range(num_envs)])
@@ -293,11 +293,11 @@ def main():
         # update our running reward
         running_reward = running_reward * 0.99 + length / num_envs * 0.01
         run_reward = run_reward * 0.99 + roll_length * 0.01
-        
+
         # call function to record run data (FOR_RECORD)
         length_records, rr_records = visualize.update_records(\
             roll_length, run_reward, length_records, rr_records)
-        
+
         finish_episode()
         if i_episode % args.log_interval == 0:
             print('Episode {}\tAverage length per environment {}'.format(i_episode, run_reward))
@@ -317,7 +317,7 @@ def main():
 
     if i_episode == 5999:
         print('Well that failed')
-        
+
     visualize.pickle_list('distral', envs_names, length_records,\
                               rr_records)
 

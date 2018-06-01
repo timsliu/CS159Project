@@ -56,6 +56,10 @@ tech_list = ["hard_param", "soft_param", "fine_tuning", \
 # global reward threshold - used to determine convergence times
 REWARD_THRESHOLD = 950
 
+# list of colors to use!
+colors = ['firebrick', 'coral', 'gold', 'forestgreen', 'skyblue',\
+          'midnightblue', 'purple', 'magenta']
+
 
 def init_list(env_names):
     '''initializes the global length_records and rr_records lists to
@@ -353,7 +357,7 @@ def compute_mean_list(data_list):
     # list of how long each element is
     length_list = [len(x) for x in data_list]
     # empty list that will hold the averages
-    average_list = [0 for x in range(int(np.mean(length_list)))]
+    average_list = [0 for x in range(int(np.percentile(length_list, 30)))]
     
     # iterate through average list
     for i in range(len(average_list)):
@@ -390,7 +394,6 @@ def get_combined_list(technique, env, data_type):
     
     # generate list of files with the data we're interested in
     file_list = [x for x in os.listdir() if data_type in x]
-    print(file_list)
     
     # list of all the data
     data_list = []
@@ -405,19 +408,105 @@ def get_combined_list(technique, env, data_type):
         
     return data_list
 
-def graph_compares(techs_evs, data_type, name = "comparison.png"):
-    '''graphs the mean lines for multiple technique-environment pairs
-    on a single graph
-    arguments: tech_evs - list of tuples with each tuple a technique/
-                          environment pair
-               data_type - string either "length" or "run_reward"
-               name - name of saved file'''
+def graph_tech(tech, data_type):
+    '''graph the mean lines for different environments for a single
+    technique
+    arguments - technique we're interested in
+                data_type - either running_reward or length'''
     
-    # TODO
+    # change to summary directory
+    os.chdir(os.path.join(os.path.join(HOME, 'trial_records'), 'summary'))
+    
+    # filter by correct technique
+    file_list = [x for x in os.listdir() if tech in x]
+    # filter by correct data type
+    file_list = [x for x in file_list if data_type in x]
+    
+    legends = []
+    all_data = []
+        
+    for f in file_list:
+        # open the pickle file
+        f_open = open(f, "rb")
+        # add the pickle file to the data list
+        all_data.append(pickle.load(f_open))
+        f_open.close()
+        for env in env_list:
+            if env in f:
+                # build list of environments to use in legend
+                legends.append(env)
+    
+    # switch to plots folder
+    os.chdir(os.path.join(os.path.join(HOME, 'trial_records'), 'all_plots'))
+    for (i, data) in enumerate(all_data): 
+        plt.plot(data, linewidth = 2, color = colors[i], label = legends[i])
+        # title and label the plot
+        
+    title_string = "%s of environments for %s" %(data_type, tech)
+    plt.title(title_string)
+    plt.xlabel("Episodes")
+    plt.ylabel(data_type)
+    plt.legend()
+    plt.grid(True)
+    
+    plt.savefig(title_string + '.png')
+    plt.close()
     
     return  
 
+def graph_env(env, data_type):
+    '''graph the mean lines for different techniques for a single
+    environment
+    arguments - environment we're interested in
+                data_type - either running_reward or length'''
+    
+    # change to summary directory
+    os.chdir(os.path.join(os.path.join(HOME, 'trial_records'), 'summary'))
+    
+    # filter by correct technique
+    file_list = [x for x in os.listdir() if env in x]
+    # filter by correct data type
+    file_list = [x for x in file_list if data_type in x]
+    
+    legends = []
+    all_data = []
+        
+    for f in file_list:
+        # open the pickle file
+        f_open = open(f, "rb")
+        # add the pickle file to the data list
+        all_data.append(pickle.load(f_open))
+        f_open.close()
+        for tech in tech_list:
+            if tech in f:
+                # build list of environments to use in legend
+                legends.append(tech)
+    
+    # switch to plots folder
+    os.chdir(os.path.join(os.path.join(HOME, 'trial_records'), 'all_plots'))
+    for (i, data) in enumerate(all_data): 
+        plt.plot(data, linewidth = 2, color = colors[i], label = legends[i])
+        # title and label the plot
+        
+    title_string = "%s of techniques for %s" %(data_type, env)
+    plt.title(title_string)
+    plt.xlabel("Episodes")
+    plt.ylabel(data_type)
+    plt.legend()
+    plt.grid(True)
+    
+    plt.savefig(title_string + '.png')
+    plt.close()
+    
+    return 
+
 def mass_run():
     '''used to invoke graphing or summary functions multiple times'''
+    for tech in tech_list:
+        graph_tech(tech, "running_reward")
+        graph_tech(tech, "length")
+    for env in env_list:
+        graph_env(env, "running_reward")
+        graph_env(env, "length")
     
     return
